@@ -1,5 +1,3 @@
-# Modulo per Metodi Bayesiani
-
 class EsempioMetodoBayesiano:
     def __init__(self, iperparametri):
         self.iperparametri = iperparametri
@@ -12,5 +10,4 @@ class EsempioMetodoBayesiano:
         print("Inferenza completata.")
         return distribuzione_posteriore
 
-# Altre funzioni o classi relative ai metodi bayesiani possono essere aggiunte qui.
 

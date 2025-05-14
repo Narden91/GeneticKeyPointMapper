@@ -1,4 +1,3 @@
-# Modulo per la classificazione multiclasse
 import pandas as pd
 from xgboost import XGBClassifier
 from catboost import CatBoostClassifier
@@ -20,9 +19,8 @@ def train_and_evaluate_xgboost(X_train, y_train, X_test, y_test, params=None):
 def train_and_evaluate_catboost(X_train, y_train, X_test, y_test, params=None):
     """Addestra e valuta un modello CatBoost."""
     print("Addestramento CatBoost...")
-    # Assicurarsi che le colonne categoriche siano gestite correttamente o convertite
-    # CatBoost può gestire feature categoriche nativamente se specificate
-    model = CatBoostClassifier(**(params if params else {}), verbose=0, loss_function='MultiClass') # loss_function per multiclasse
+
+    model = CatBoostClassifier(**(params if params else {}), verbose=0, loss_function='MultiClass') 
     model.fit(X_train, y_train)
     predictions = model.predict(X_test)
     accuracy = accuracy_score(y_test, predictions)

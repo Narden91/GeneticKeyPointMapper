@@ -1,4 +1,3 @@
-# Modulo per il caricamento dei dati
 import pandas as pd
 
 def load_csv(file_path):
