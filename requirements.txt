@@ -1,11 +1,9 @@
-# Dipendenze del progetto
-
+PyYAML
 pandas
 scikit-learn
 xgboost
 catboost
 shap
 lime
-# Aggiungere altre dipendenze se necessario, ad esempio matplotlib per i plot SHAP
-# matplotlib
-
+matplotlib
+deap

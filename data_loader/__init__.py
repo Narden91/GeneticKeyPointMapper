@@ -1,4 +1,1 @@
-# Questo file rende la cartella 'data_loader' un pacchetto Python
-
-from .data_loader import load_csv
-
+from .data_loader import load_csv, load_all_csvs_from_folder, load_specific_csv_from_folder
