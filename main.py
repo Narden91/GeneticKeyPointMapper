@@ -5,7 +5,6 @@ import warnings
 import numpy as np
 from rich.console import Console
 from rich.panel import Panel
-# from rich import print as rprint # Removed as console.print is used directly
 import matplotlib.pyplot as plt
 import pickle
 import re
@@ -23,7 +22,7 @@ os.makedirs(REPORTS_DIR, exist_ok=True)
 LOG_FILE_PATH = os.path.join(REPORTS_DIR, "evolution_log.txt")
 HISTORY_FILE_PATH = os.path.join(REPORTS_DIR, "evolution_history.pkl")
 PARETO_PLOT_PATH = os.path.join(REPORTS_DIR, "pareto_front_plot.png")
-EVOLUTION_PLOT_PATH = os.path.join(REPORTS_DIR, "evolution_progress_plot.png") # New plot path
+EVOLUTION_PLOT_PATH = os.path.join(REPORTS_DIR, "evolution_progress_plot.png") 
 
 
 def log_message(message_obj, to_console=True, to_file=True):
