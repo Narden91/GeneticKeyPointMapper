@@ -1,95 +1,199 @@
-# Progetto di Classificazione Multiclasse con Struttura Modulare Avanzata
+# Evolutionary Pose Retargeting System for Markerless Gait Analysis
 
-Questo progetto fornisce una struttura modulare per un task di classificazione multiclasse utilizzando Python e diverse librerie di machine learning. Include moduli per il caricamento dei dati, preprocessing, classificazione con XGBoost, CatBoost e Random Forest, calibrazione dei modelli, interpretabilità, algoritmi genetici (esempio) e metodi bayesiani (esempio).
+## Overview
 
-Il file `main.py` si trova al primo livello (root) del repository e funge da punto di ingresso principale per l'esecuzione del pipeline.
+This system uses evolutionary algorithms to automatically learn how to map 3D human pose data from one representation system to another, specifically designed for markerless human movement and gait analysis applications. By using multi-objective optimization techniques (specifically NSGA-III), it finds efficient ways to translate between different skeletal structures with varying numbers of keypoints without requiring physical markers on subjects.
 
-## Struttura del Progetto
+## Problem Statement
+
+In clinical gait analysis and human movement research, there's an increasing shift from traditional marker-based systems to markerless video-based approaches:
+- Converting from a simple skeleton (e.g., from markerless video tracking with 33 keypoints) to a detailed biomechanical model (e.g., with 54 keypoints needed for clinical analysis)
+- Enabling analysis of movements captured with accessible camera systems instead of expensive specialized equipment
+- Making gait and movement data from video recordings compatible with clinical assessment tools and biomechanical models
+
+Manual retargeting between these different representation systems is time-consuming, requires specialized expertise, and introduces human bias. This system automates the process using machine learning while maintaining clinical-grade accuracy.
+
+## How It Works
+
+### 1. Input Data
+The system requires paired examples of the same movements in both source and target formats:
+- Source format (KP3D): CSV files containing 3D coordinates (x,y,z) for each keypoint from markerless video tracking systems over time
+- Target format (AL): CSV files containing 3D coordinates for the corresponding anatomical landmarks in a biomechanical model
+- File naming convention: `SubjectID__MovementType__Format.csv` (e.g., `TDB_001_F__F-JUMP__KP3D.csv` for source and `TDB_001_F__F-JUMP__AL.csv` for target)
+
+The system is specifically designed to work with human movement data from different gait analysis modalities. It can process various movement types including:
+- Standard walking gait (F-GAIT)
+- Running (F-RUNNING)
+- Jumping (F-JUMP)
+- Static anatomical poses (A-POSE)
+
+### 2. Transformation Model
+The core of the system is a mathematical transformation that converts source poses from markerless video tracking to biomechanically accurate target poses:
 
 ```
-genetic_ml_project/
-├── data/                     # Cartella per i dataset (es. file CSV)
-│   └── esempio.csv           # File CSV di esempio creato da main.py per test
-├── models/                   # Cartella per i modelli addestrati salvati (es. shap_summary_plot.png)
-├── notebooks/                # Cartella per Jupyter notebooks di analisi esplorativa o sperimentazione
-├── data_loader/              # Modulo per il caricamento dei dati
-│   ├── __init__.py
-│   └── data_loader.py
-├── preprocessor/             # Modulo per il preprocessing e la pulizia dei dati
-│   ├── __init__.py
-│   └── preprocessor.py
-├── classifier/               # Modulo per l'addestramento e la valutazione dei modelli
-│   ├── __init__.py
-│   └── classifier.py
-├── calibration/              # Modulo per la calibrazione dei modelli
-│   ├── __init__.py
-│   └── calibration.py
-├── explainer/                # Modulo per l'interpretabilità dei modelli
-│   ├── __init__.py
-│   └── explainer.py
-├── genetic_algorithm/        # Modulo per algoritmi genetici (esempio)
-│   ├── __init__.py
-│   └── genetic_algorithm.py
-├── bayesian_methods/         # Modulo per metodi bayesiani (esempio)
-│   ├── __init__.py
-│   └── bayesian_methods.py
-├── tests/                    # Cartella per i test unitari e di integrazione (da implementare)
-├── main.py                   # Script principale per eseguire il pipeline
-├── requirements.txt          # File con le dipendenze Python del progetto
-└── README.md                 # Questo file
+TargetPose = (C1 × SourcePose) × S + B
 ```
 
-## Funzionalità Principali
+Where:
+- **C1**: Correspondence matrix - determines which source keypoints influence which target anatomical landmarks
+- **S**: Scaling factors - adjusts the magnitude of translated points to account for differences in skeletal proportions
+- **B**: Bias vectors - applies position offsets to translated points to align with anatomical reference frames
 
-- **Punto di Ingresso Unico**: `main.py` nella root del progetto orchestra l'intero flusso di lavoro.
-- **Moduli Indipendenti**: Ogni funzionalità chiave (caricamento dati, preprocessing, classificazione, ecc.) è incapsulata nel proprio modulo Python (package), facilitando la manutenibilità e l'espandibilità.
-    - `data_loader`: Legge dati da file CSV.
-    - `preprocessor`: Gestisce la pulizia base e la suddivisione dei dati.
-    - `classifier`: Addestra e valuta modelli XGBoost, CatBoost, Random Forest.
-    - `calibration`: Calibra le probabilità dei modelli.
-    - `explainer`: Fornisce interpretabilità tramite SHAP.
-    - `genetic_algorithm`: Contiene una classe di esempio per un algoritmo genetico.
-    - `bayesian_methods`: Contiene una classe di esempio per metodi bayesiani.
-- **Esempio Funzionante**: `main.py` include la creazione di un dataset di esempio e l'esecuzione di un pipeline completo con tutti i moduli.
+Together, these parameters form the "genome" that the system evolves to find optimal transformations between the markerless tracking data and clinically relevant biomechanical landmarks.
 
-## Come Iniziare
+### 3. Evolutionary Optimization (NSGA-III)
+The system uses evolutionary algorithms to find the best transformation parameters:
 
-1.  **Clonare il repository (o scaricare i file).**
-2.  **Creare un ambiente virtuale (consigliato):**
-    ```bash
-    python -m venv venv
-    source venv/bin/activate  # Su Windows: venv\Scripts\activate
-    ```
-3.  **Installare le dipendenze:**
-    ```bash
-    pip install -r requirements.txt
-    ```
-4.  **Preparare i dati (Opzionale, se non si usa l'esempio):**
-    -   Se si desidera utilizzare un proprio dataset, inserire il file CSV nella cartella `data/`.
-    -   Aggiornare il percorso del file (`file_path`) e il nome della colonna target (`target_column`) in `main.py`.
-5.  **Eseguire il pipeline:**
-    ```bash
-    python main.py
-    ```
-    Questo eseguirà il pipeline utilizzando il file `data/esempio.csv` creato automaticamente se non esiste.
+1. **Initialization**: Create a population of random transformation parameters
+2. **Evaluation**: Assess each transformation based on two objectives crucial for clinical gait analysis:
+   - **Accuracy** (MPJPE - Mean Per Joint Position Error): How closely the transformed pose matches the anatomical landmarks needed for clinical analysis
+   - **Temporal Consistency**: How smoothly the transformed poses flow over time, ensuring natural movement patterns without artifacts
+3. **Selection**: Keep the best-performing transformations that preserve clinical features
+4. **Variation**: Create new transformations through:
+   - Crossover: Combining pieces of successful transformations
+   - Mutation: Making small random changes to parameters
+5. **Iteration**: Repeat for many generations to evolve increasingly effective transformations
 
-## Moduli Dettagliati
+The multi-objective approach (NSGA-III) finds solutions that balance anatomical accuracy and movement smoothness rather than sacrificing one for the other - essential for valid clinical assessments.
 
-Ciascun modulo nella struttura (es. `data_loader`, `preprocessor`, ecc.) è un package Python contenente:
--   `__init__.py`: Rende la cartella un package e gestisce le importazioni principali dal modulo (es. `from .data_loader import load_csv`).
--   Un file `.py` con l'implementazione logica (es. `data_loader.py`).
+## Project Structure
 
-Consultare il codice sorgente all'interno di ciascun modulo e il file `main.py` per i dettagli di implementazione e di interazione tra i moduli.
+```
+├── main.py                  # Main execution script
+├── config.yaml              # Configuration file
+├── pose_retargeting/
+│   ├── evolutionary_runner.py     # NSGA-III implementation
+│   ├── genome_and_transform.py    # Transformation model
+│   ├── pose_data_loader.py        # Data loading and preprocessing
+│   └── retargeting_problem.py     # Problem definition
+├── data/                    # Pose data files
+│   ├── TDB_001_F/           # Data for subject 1
+│   │   ├── TDB_001_F__F-JUMP__KP3D.csv  # Source pose data
+│   │   └── TDB_001_F__F-JUMP__AL.csv    # Target pose data
+│   └── ...
+└── reports/                 # Output files
+    ├── evolution_log.txt           # Log of the optimization process
+    ├── evolution_history.pkl       # Saved optimization history
+    └── pareto_front_plot.png       # Visualization of solution trade-offs
+```
 
-## TODO / Prossimi Passi (Esempio)
+## Usage
 
--   Espandere le funzionalità dei moduli `genetic_algorithm` e `bayesian_methods` con logiche più complesse.
--   Implementare la logica per salvare e caricare i modelli addestrati nella cartella `models/`.
--   Aggiungere la gestione degli argomenti da riga di comando (es. con `argparse`) in `main.py`.
--   Sviluppare test unitari e di integrazione nella cartella `tests/`.
--   Migliorare le strategie di preprocessing, validazione incrociata e ricerca degli iperparametri.
+### Prerequisites
+- Python 3.7+
+- Required packages: pymoo, numpy, matplotlib, pandas, rich, scikit-learn, PyYAML
 
-## Contributi
+### Setup
+1. Clone the repository
+2. Install required packages: `pip install -r requirements.txt`
+3. Organize your pose data in the `data/` directory following the expected structure:
+   - Source data should be keypoint data from markerless tracking systems
+   - Target data should be the corresponding anatomical landmarks
 
-Sentitevi liberi di contribuire al progetto aprendo issue o pull request.
+### Configuration
+Edit `config.yaml` to customize:
+- Data paths and formats
+- Number of keypoints in source (KP3D) and target (AL) representations
+- Specific movement types to analyze (e.g., F-JUMP, F-GAIT, F-RUNNING)
+- Optimization parameters (population size, generations, etc.)
+- Genome parameter bounds to reflect biomechanical constraints
 
+### Running the System
+```bash
+python main.py
+```
+
+The system will:
+1. Load and preprocess the motion capture data
+2. Define the optimization problem based on keypoint mapping
+3. Run the NSGA-III evolutionary algorithm to find optimal transformations
+4. Generate reports and visualizations of the results in the `reports/` directory
+
+## Output and Results
+
+### 1. Pareto Front Plot
+The system produces a plot showing the trade-off between anatomical accuracy (MPJPE) and temporal consistency:
+- Each point represents a different possible transformation solution
+- Lower values on both axes are better for clinical applications
+- Points are labeled with solution indices for reference
+- The plot helps clinicians and researchers select the most appropriate transformation for their specific analysis needs
+
+### 2. Solution Parameters
+For selected solutions, the system provides:
+- Performance metrics (MPJPE and temporal consistency scores)
+- Transformation parameters (C1, S, B matrices) that define the mapping from markerless tracking to anatomical landmarks
+
+### 3. Using the Results
+After optimization, you can:
+- Select a solution that offers your preferred balance between anatomical accuracy and movement smoothness
+- Apply the transformation to new markerless tracking data using the `transform_source_to_target()` function
+- Perform clinical gait analysis on the transformed data, including:
+  - Joint angle calculations
+  - Stride analysis
+  - Kinematic assessments
+  - Pathological gait pattern identification
+
+## Example Configuration
+
+```yaml
+# Example configuration for gait analysis application
+pose_retargeting:
+  source_num_keypoints: 33  # Standard for many markerless video tracking systems
+  target_num_keypoints: 54  # Detailed anatomical landmark model
+  movement_filter: ["F-GAIT", "F-RUNNING"]  # Focus on locomotion patterns
+  
+  # Subject-based train/test split
+  train_subject_ratio: 0.8  # Use 80% of subjects for training
+
+nsga3_optimizer:
+  population_size: 100
+  num_generations: 50
+  
+  # Objective weights for final solution selection
+  objective_weights:
+    accuracy: 1.0            # Prioritize anatomical accuracy
+    temporal_consistency: 0.5 # Still consider smoothness but with lower weight
+```
+
+## Customization
+
+The system can be adapted for different clinical applications:
+- Focus on specific movement types relevant to particular pathologies
+- Adjust the train/test split to handle various patient populations
+- Modify the transformation model to account for specific anatomical constraints
+- Add new evaluation metrics for specialized clinical assessments
+- Tune the evolutionary algorithm parameters to optimize for specific gait patterns
+
+## Clinical Applications
+
+This system can benefit various clinical and research applications:
+- **Rehabilitation Assessment**: Track patient progress over time with affordable markerless systems
+- **Sports Medicine**: Analyze athletic movements without restrictive markers
+- **Orthopedic Evaluation**: Assist in pre/post-surgical assessment of gait
+- **Neurological Assessment**: Quantify movement disorders like Parkinson's or cerebellar ataxia
+- **Pediatric Gait Analysis**: Enable child-friendly assessment without the need for marker attachment
+- **Remote Monitoring**: Allow for at-home gait assessment using consumer cameras
+
+## Troubleshooting
+
+Common issues:
+- Data loading problems: Check file formats and naming conventions (should follow TDB_XXX_X__MOVEMENT-TYPE__FORMAT.csv)
+- Memory issues: Reduce the number of sequences or frames processed
+- Poor results: Increase population size or number of generations, adjust genome parameter bounds
+- Subject variability: Ensure training data includes diverse subject characteristics if targeting heterogeneous populations
+
+## Future Directions
+
+Potential enhancements to the system:
+- **Real-time Processing**: Optimize the transformation for real-time clinical feedback
+- **Additional Modalities**: Extend to support other markerless tracking systems and clinical models
+- **Pathology-specific Models**: Develop specialized transformations for specific movement disorders
+
+
+## License
+
+Emanuele Nardone
+
+## Acknowledgements
+
+This project uses the NSGA-III algorithm implementation from the pymoo library and is designed to advance the field of markerless human movement analysis for clinical applications.

@@ -24,7 +24,7 @@ class EvolutionaryRunner:
         # The pop_size should ideally be a multiple of a number related to n_partitions.
         # For 2 objectives, ref_dirs would be pop_size points on a line.
         # A common choice for n_partitions for n_obj=2 is pop_size - 1 or a fixed reasonable number.
-        n_partitions = self.config.get('reference_point_partitions', self.config['population_size'] -1 if self.config['population_size'] > 1 else 12) # Heuristic, may need tuning
+        n_partitions = self.config.get('reference_point_partitions', self.config['population_size'] -1 if self.config['population_size'] > 1 else 12) # Heuristic
         if self.problem.n_obj > 1:
             ref_dirs = get_reference_directions("das-dennis", self.problem.n_obj, n_partitions=n_partitions)
         else: # Single objective
@@ -60,8 +60,8 @@ class EvolutionaryRunner:
             algorithm,
             termination,
             seed=self.random_seed,
-            save_history=True, # Useful for analysis later
-            verbose=True # Pymoo's own verbosity
+            save_history=True,
+            verbose=True 
         )
         
         console.print("[bold green]Optimization finished.[/bold green]")

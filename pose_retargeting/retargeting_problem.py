@@ -37,7 +37,7 @@ class PoseRetargetingProblem(Problem):
         
         super().__init__(n_var=self.n_var_total, 
                          n_obj=2,  # Accuracy (MPJPE) and Temporal Consistency
-                         n_constr=0, # No explicit constraints for pymoo here (C1 row sum handled in Genome class)
+                         n_constr=0,
                          xl=np.array(xl_list, dtype=np.float32),
                          xu=np.array(xu_list, dtype=np.float32))
 
@@ -59,7 +59,7 @@ class PoseRetargetingProblem(Problem):
 
             for source_seq, target_seq in zip(self.source_sequences, self.target_sequences):
                 if source_seq.shape[0] == 0 or target_seq.shape[0] == 0:
-                    continue # Skip empty sequences
+                    continue 
 
                 num_frames = source_seq.shape[0]
                 predicted_target_seq = np.zeros_like(target_seq)
