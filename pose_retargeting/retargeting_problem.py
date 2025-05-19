@@ -1,6 +1,6 @@
 import numpy as np
 from pymoo.core.problem import Problem
-from genome_and_transform import Genome, transform_source_to_target
+from .genome_and_transform import Genome, transform_source_to_target
 
 class PoseRetargetingProblem(Problem):
     def __init__(self, 

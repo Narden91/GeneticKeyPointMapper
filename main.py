@@ -5,12 +5,12 @@ import warnings
 import numpy as np
 from rich.console import Console
 from rich.panel import Panel
-from rich import print as rprint # Use rprint to avoid conflict with built-in print
+from rich import print as rprint 
 import matplotlib.pyplot as plt
 
 
 # Import new modules for pose retargeting
-from data_loader import load_pose_data
+from pose_retargeting import load_pose_data
 from pose_retargeting import PoseRetargetingProblem
 from pose_retargeting import EvolutionaryRunner
 from pose_retargeting import Genome 

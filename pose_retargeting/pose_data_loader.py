@@ -34,7 +34,9 @@ def preprocess_sequence_data(sequence, normalization_range=None):
     if normalization_range:
         original_shape = sequence.shape
         data_flat = sequence.reshape(-1, 1) # Flatten to scale all values
-        scaler = MinMaxScaler(feature_range=normalization_range)
+        # Convert the list to a tuple here:
+        feature_range = tuple(normalization_range) if isinstance(normalization_range, list) else normalization_range
+        scaler = MinMaxScaler(feature_range=feature_range)
         scaled_data_flat = scaler.fit_transform(data_flat)
         sequence = scaled_data_flat.reshape(original_shape)
     
