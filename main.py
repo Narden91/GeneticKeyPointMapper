@@ -23,6 +23,7 @@ os.makedirs(REPORTS_DIR, exist_ok=True)
 LOG_FILE_PATH = os.path.join(REPORTS_DIR, "evolution_log.txt")
 HISTORY_FILE_PATH = os.path.join(REPORTS_DIR, "evolution_history.pkl")
 PARETO_PLOT_PATH = os.path.join(REPORTS_DIR, "pareto_front_plot.png")
+EVOLUTION_PLOT_PATH = os.path.join(REPORTS_DIR, "evolution_progress_plot.png") # New plot path
 
 
 def log_message(message_obj, to_console=True, to_file=True):
@@ -153,36 +154,123 @@ def main():
         except Exception as e:
             log_message(f"[yellow]Warning: Could not save evolution history: {e}[/yellow]")
 
+        # --- Enhanced Pareto Front Plot ---
+        plt.style.use('seaborn-v0_8-whitegrid') # Using a seaborn style for better aesthetics
         plt.figure(figsize=(10, 7))
-        plt.scatter(results.F[:, 0], results.F[:, 1], s=50,
-                      facecolors='blue', edgecolors='blue', alpha=0.7, label="Pareto Optimal Solutions")
+        
+        # Scatter plot of all non-dominated solutions
+        plt.scatter(results.F[:, 0], results.F[:, 1], s=70,
+                      facecolors='royalblue', edgecolors='black', alpha=0.8, label="Pareto Optimal Solutions")
 
+        # Sort solutions by the first objective to draw the front line
+        sorted_indices = np.argsort(results.F[:, 0])
+        F_sorted = results.F[sorted_indices]
+        
+        if F_sorted.shape[0] > 1: # Only draw line if more than one point
+            plt.plot(F_sorted[:, 0], F_sorted[:, 1], color='orangered', linestyle='--', linewidth=1.5, label="Pareto Front")
+
+        # Annotate some specific solutions (indices are from the original results.F)
         for i, (f1, f2) in enumerate(results.F):
-            plt.annotate(f"{i}", (f1, f2), textcoords="offset points", xytext=(0,5), ha='center', fontsize=9)
+            plt.annotate(f"{i}", (f1, f2), textcoords="offset points", xytext=(0,8), ha='center', fontsize=9)
 
         best_mpjpe_idx = np.argmin(results.F[:, 0])
         plt.scatter(results.F[best_mpjpe_idx, 0], results.F[best_mpjpe_idx, 1],
-                    s=100, facecolors='none', edgecolors='red', linewidth=1.5,
+                    s=150, facecolors='none', edgecolors='crimson', linewidth=2,
                     label=f"Lowest MPJPE (Sol: {best_mpjpe_idx})")
 
-        if len(results.F) > 2: # Ensure there are enough points to pick a "compromise" distinct from best_mpjpe
-            sorted_indices_f1 = np.argsort(results.F[:, 0])
-            compromise_idx_candidate = sorted_indices_f1[len(sorted_indices_f1) // 2]
-            if compromise_idx_candidate != best_mpjpe_idx :
-                 plt.scatter(results.F[compromise_idx_candidate, 0], results.F[compromise_idx_candidate, 1],
-                            s=100, facecolors='none', edgecolors='green', linewidth=1.5,
-                            label=f"Example Compromise (Sol: {compromise_idx_candidate})")
+        if len(results.F) > 2: 
+            # Find a compromise solution (e.g., median f1 after sorting, ensuring it's distinct)
+            # This example compromise logic might need to be smarter depending on front shape
+            # For simplicity, let's pick one near the "knee" or middle if sorted by f1.
+            # The original logic for compromise might be okay, or we can refine.
+            # Let's keep the original logic for compromise for now for simplicity.
+            sorted_indices_f1_original = np.argsort(results.F[:, 0])
+            # Try to pick a compromise solution that is not the best MPJPE one.
+            # This could be the median of sorted by f1, or median of sorted by f2, or other heuristic.
+            # For this example, let's use a point around the middle of the f1-sorted front.
+            compromise_idx_candidate_orig_idx = sorted_indices_f1_original[len(sorted_indices_f1_original) // 2]
+            
+            if compromise_idx_candidate_orig_idx != best_mpjpe_idx :
+                 plt.scatter(results.F[compromise_idx_candidate_orig_idx, 0], results.F[compromise_idx_candidate_orig_idx, 1],
+                            s=150, facecolors='none', edgecolors='forestgreen', linewidth=2,
+                            label=f"Example Compromise (Sol: {compromise_idx_candidate_orig_idx})")
 
-        plt.title('Pareto Front (NSGA-III)', fontsize=16)
+        plt.title('Pareto Front (NSGA-III)', fontsize=16, fontweight='bold')
         plt.xlabel('f1: MPJPE (Lower is Better)', fontsize=12)
         plt.ylabel('f2: Temporal Consistency Error (Lower is Better)', fontsize=12)
-        plt.grid(True, linestyle='--', alpha=0.7)
+        plt.grid(True, linestyle=':', alpha=0.7)
         plt.legend(fontsize=10)
         plt.tight_layout()
 
-        plt.savefig(PARETO_PLOT_PATH)
-        log_message(f"Enhanced Pareto front plot saved to: [cyan]{PARETO_PLOT_PATH}[/cyan]")
-        # plt.show()
+        try:
+            plt.savefig(PARETO_PLOT_PATH)
+            log_message(f"Pareto front plot saved to: [cyan]{PARETO_PLOT_PATH}[/cyan]")
+        except Exception as e:
+            log_message(f"[yellow]Warning: Could not save Pareto plot: {e}[/yellow]")
+        # plt.show() # Usually commented out for automated runs
+
+        # --- Evolution Plot ---
+        if hasattr(results, 'history') and results.history is not None and len(results.history) > 0:
+            num_generations = len(results.history)
+            generations = np.arange(1, num_generations + 1)
+
+            best_f1_per_gen = np.full(num_generations, np.inf)
+            avg_f1_per_gen = np.full(num_generations, np.inf)
+            best_f2_per_gen = np.full(num_generations, np.inf)
+            avg_f2_per_gen = np.full(num_generations, np.inf)
+
+            for i, algorithm_gen in enumerate(results.history):
+                if algorithm_gen.opt is not None and algorithm_gen.opt.has("F"): # opt stores non-dominated solutions
+                    opt_F = algorithm_gen.opt.get("F")
+                    if opt_F.ndim == 2 and opt_F.shape[0] > 0 and opt_F.shape[1] >= 2:
+                        best_f1_per_gen[i] = np.min(opt_F[:, 0])
+                        avg_f1_per_gen[i] = np.mean(opt_F[:, 0])
+                        best_f2_per_gen[i] = np.min(opt_F[:, 1])
+                        avg_f2_per_gen[i] = np.mean(opt_F[:, 1])
+                    elif opt_F.ndim == 1 and opt_F.shape[0] >=2 : # single solution in opt
+                        best_f1_per_gen[i] = opt_F[0]
+                        avg_f1_per_gen[i] = opt_F[0]
+                        best_f2_per_gen[i] = opt_F[1]
+                        avg_f2_per_gen[i] = opt_F[1]
+
+
+            plt.figure(figsize=(12, 8))
+            plt.suptitle('Evolution of Objectives Over Generations', fontsize=16, fontweight='bold')
+
+            # Plot for f1 (MPJPE)
+            plt.subplot(2, 1, 1)
+            plt.plot(generations, best_f1_per_gen, marker='o', linestyle='-', color='dodgerblue', markersize=5, label='Best MPJPE (f1)')
+            plt.plot(generations, avg_f1_per_gen, marker='x', linestyle='--', color='skyblue', markersize=5, label='Average MPJPE (f1) in Pareto Set')
+            plt.title('MPJPE (f1) Evolution', fontsize=14)
+            plt.xlabel('Generation', fontsize=12)
+            plt.ylabel('MPJPE Value', fontsize=12)
+            plt.legend(fontsize=10)
+            plt.grid(True, linestyle=':', alpha=0.7)
+            plt.ylim(bottom=0) # MPJPE should not be negative
+
+            # Plot for f2 (Temporal Consistency)
+            plt.subplot(2, 1, 2)
+            plt.plot(generations, best_f2_per_gen, marker='o', linestyle='-', color='forestgreen', markersize=5, label='Best Temp. Consistency (f2)')
+            plt.plot(generations, avg_f2_per_gen, marker='x', linestyle='--', color='lightgreen', markersize=5, label='Average Temp. Consistency (f2) in Pareto Set')
+            plt.title('Temporal Consistency (f2) Evolution', fontsize=14)
+            plt.xlabel('Generation', fontsize=12)
+            plt.ylabel('Temporal Consistency Error', fontsize=12)
+            plt.legend(fontsize=10)
+            plt.grid(True, linestyle=':', alpha=0.7)
+            plt.ylim(bottom=0) # Error should not be negative
+
+
+            plt.tight_layout(rect=[0, 0, 1, 0.96]) # Adjust layout to make space for suptitle
+            
+            try:
+                plt.savefig(EVOLUTION_PLOT_PATH)
+                log_message(f"Evolution progress plot saved to: [cyan]{EVOLUTION_PLOT_PATH}[/cyan]")
+            except Exception as e:
+                log_message(f"[yellow]Warning: Could not save evolution plot: {e}[/yellow]")
+            # plt.show()
+        else:
+            log_message("[yellow]Evolution history not available or empty, skipping evolution plot.[/yellow]")
+
 
         selected_solution_X = results.X[best_mpjpe_idx]
         selected_solution_F = results.F[best_mpjpe_idx]
@@ -200,7 +288,7 @@ def main():
 
 if __name__ == "__main__":
     warnings.filterwarnings("ignore", category=UserWarning)
-    warnings.filterwarnings("ignore", category=RuntimeWarning)
+    warnings.filterwarnings("ignore", category=RuntimeWarning) 
 
     if not os.path.exists('config.yaml'):
         console.print("[bold red]ERROR:[/bold red] Configuration file 'config.yaml' does not exist.", style="red")
