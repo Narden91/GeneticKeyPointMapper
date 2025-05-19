@@ -1,21 +1,51 @@
 settings:
-  verbose: 0 # 0: minimal, 1: GA plot, 2: data heads
-  feature_selection: False
+  verbose: 1 # 0: minimal, 1: basic EA output
+  global_random_seed: 42
 
-data_loader:
-  data_folder_path: "data/LP_Dataset_3Devices__LC1__2500pointXstate__16_11_2022/"
-  target_column: "GT"
-  specific_file: "Fan_Heater__values.csv" # Desk_Lamp__values.csv 
+# --- NEW SECTION FOR POSE RETARGETING ---
+pose_retargeting:
+  data_base_path: "data/" # Base path to "TDB_XXX_Y" folders
+  source_keypoints_file_suffix: "__KP3D.csv"
+  target_keypoints_file_suffix: "__AL.csv"
+  source_num_keypoints: 33
+  target_num_keypoints: 54
+  
+  # For initial simplified run, focusing on one movement type
+  # To use all, set movement_filter to null or an empty list
+  # Example: movement_filter: ["JUMP", "WALK"]
+  movement_filter: ["JUMP"] # e.g., "__F-JUMP__" pattern in filename
+  
+  # Subject-based train/test split
+  # Option 1: Ratio (subjects will be randomly split)
+  train_subject_ratio: 0.8 
+  # Option 2: Explicit lists (if train_subject_ratio is null/not present)
+  # train_subjects: ["TDB_001_F", "TDB_002_M"] 
+  # test_subjects: ["TDB_003_F"]
 
-genetic_algorithm:
-  params:
-    popolazione: 10
-    generazioni: 5
-    # crossover_prob: 0.7 # Optional, defaults in GA class
-    # mutation_prob: 0.2  # Optional, defaults in GA class
-    # accuracy_weight: 0.6 # Optional, defaults in GA class
-    # feature_count_weight: 0.2 # Optional, defaults in GA class
-    # correlation_weight: 0.2 # Optional, defaults in GA class
+  preprocessing:
+    normalization_range: [0, 1] # [min, max] for coordinate scaling, or null to skip
+    # outlier_filter: "median" # "savitzky_golay" or null (Not implemented in this simplified version)
+    # missing_data_method: "linear_interpolate" # or "cubic_spline" (Not implemented in this simplified version)
+
+genome_definition:
+  C1_init_bounds: [0, 1]  # For correspondence matrix
+  S_init_bounds: [0.5, 1.5] # For scaling factors
+  B_init_bounds: [-0.2, 0.2] # For bias vectors
+
+nsga3_optimizer:
+  population_size: 50 # Start small
+  num_generations: 30 # Start small
+  crossover_prob: 0.9
+  crossover_eta: 15 # For SBX
+  mutation_prob: 0.1 # Per-variable mutation probability
+  mutation_eta: 20  # For Polynomial Mutation
+
+  # Weights for objectives (not used by NSGA-III directly, but for final selection or if simplifying to single objective later)
+  # For now, these are conceptual for the multi-objective nature
+  objective_weights:
+    accuracy: 1.0
+    temporal_consistency: 0.5
+    # anatomical_plausibility: 0.2 # For future
 
 model:
   type: LogisticRegression  # Options: RandomForest, XGBoost, CatBoost, LogisticRegression

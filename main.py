@@ -1,27 +1,25 @@
 import time
-import pandas as pd
 import yaml
 import os
 import warnings
+import numpy as np
 from rich.console import Console
 from rich.panel import Panel
-from rich import print
+from rich import print as rprint # Use rprint to avoid conflict with built-in print
+import matplotlib.pyplot as plt
 
-# Import modules
-from data_loader import load_all_csvs_from_folder, load_specific_csv_from_folder
-from preprocessor import preprocess_data
-from classifier import train_and_evaluate_model
-from calibration import calibrate_model, get_calibrated_probabilities
-from explainer import explain_model_with_shap
-from genetic_algorithm import GeneticFeatureSelector
 
+# Import new modules for pose retargeting
+from data_loader import load_pose_data
+from pose_retargeting import PoseRetargetingProblem
+from pose_retargeting import EvolutionaryRunner
+from pose_retargeting import Genome 
 
 # Create a console instance
 console = Console()
 
-
-def main():
-    console.print(Panel.fit("[bold blue]Starting multiclass classification pipeline...[/bold blue]", 
+def main_pose_retargeting():
+    console.print(Panel.fit("[bold blue]Starting Pose Retargeting Pipeline with NSGA-III...[/bold blue]", 
                            border_style="blue"))
 
     # Load configuration from YAML file
@@ -39,123 +37,110 @@ def main():
     except Exception as e:
         console.print(f"[bold red]ERROR:[/bold red] Unknown error loading '[bold]{config_path}[/bold]': {e}", style="red")
         exit(1)
+
+    # --- 1. Load and Preprocess Pose Data ---
+    console.print(Panel("[yellow]📂 Loading and Preprocessing Pose Data...[/yellow]", border_style="yellow"))
+    pr_config = config.get('pose_retargeting')
+    if not pr_config:
+        console.print("[bold red]ERROR: 'pose_retargeting' section missing in config.yaml[/bold red]")
+        exit(1)
+
+    source_train, target_train, source_test, target_test = load_pose_data(config)
+
+    if not source_train or not target_train:
+        console.print("[bold red]ERROR: Training data could not be loaded. Aborting.[/bold red]")
+        exit(1)
     
-    # 1. Load Data
-    data_folder = config['data_loader']['data_folder_path']
-    specific_file = config['data_loader'].get('specific_file')
+    console.print(f"[green]✓ Data loaded: {len(source_train)} training sequences, {len(source_test)} testing sequences.[/green]")
+    if source_train:
+         console.print(f"  Example train source sequence shape: {source_train[0].shape}")
+         console.print(f"  Example train target sequence shape: {target_train[0].shape}")
 
-    console.print(Panel(f"[yellow]📂 Loading data from: [bold]{data_folder}[/bold][/yellow]", 
-                       border_style="yellow"))
+
+    # --- 2. Define the Optimization Problem ---
+    console.print(Panel("[magenta]🧬 Defining Optimization Problem...[/magenta]", border_style="magenta"))
+    source_dim_cfg = (pr_config['source_num_keypoints'], 3)
+    target_dim_cfg = (pr_config['target_num_keypoints'], 3)
     
-    if specific_file:
-        console.print(f"[yellow]Specific file: [bold]{specific_file}[/bold][/yellow]")
-        dataframe = load_specific_csv_from_folder(data_folder, specific_file)
+    genome_bounds_cfg = config.get('genome_definition')
+    if not genome_bounds_cfg:
+        console.print("[bold red]ERROR: 'genome_definition' section missing in config.yaml[/bold red]")
+        exit(1)
+
+    problem = PoseRetargetingProblem(
+        source_sequences_train=source_train,
+        target_sequences_train=target_train,
+        source_dim_config=source_dim_cfg,
+        target_dim_config=target_dim_cfg,
+        genome_param_bounds=genome_bounds_cfg
+    )
+    console.print("[green]✓ Optimization problem defined.[/green]")
+
+    # --- 3. Run Evolutionary Algorithm (NSGA-III) ---
+    console.print(Panel("[cyan]🚀 Running NSGA-III Optimization...[/cyan]", border_style="cyan"))
+    nsga3_cfg = config.get('nsga3_optimizer')
+    if not nsga3_cfg:
+        console.print("[bold red]ERROR: 'nsga3_optimizer' section missing in config.yaml[/bold red]")
+        exit(1)
+    
+    runner = EvolutionaryRunner(problem, nsga3_cfg, config['settings'].get('global_random_seed'))
+    
+    start_time = time.time()
+    results = runner.run()
+    end_time = time.time()
+    console.print(f"Optimization duration: {(end_time - start_time):.2f} seconds.")
+
+    # --- 4. Analyze Results ---
+    console.print(Panel("[green]📊 Analyzing Optimization Results...[/green]", border_style="green"))
+    if results.X is not None and results.F is not None:
+        console.print(f"Found [bold]{len(results.X)}[/bold] non-dominated solutions (Pareto front).")
+        console.print("Objective values (F) of non-dominated solutions (first 5):")
+        rprint(results.F[:5]) # F contains [MPJPE, TemporalConsistencyError]
+
+        # Example: Plot Pareto Front
+        plt.figure(figsize=(8, 6))
+        plt.scatter(results.F[:, 0], results.F[:, 1], s=30, facecolors='none', edgecolors='blue')
+        plt.title('Pareto Front (NSGA-III)')
+        plt.xlabel('f1: MPJPE (Lower is Better)')
+        plt.ylabel('f2: Temporal Consistency Error (Lower is Better)')
+        plt.grid(True)
+        
+        # Save plot
+        output_dir = "reports"
+        os.makedirs(output_dir, exist_ok=True)
+        plot_path = os.path.join(output_dir, "pareto_front_plot.png")
+        plt.savefig(plot_path)
+        console.print(f"Pareto front plot saved to: [cyan]{plot_path}[/cyan]")
+        # plt.show() # Uncomment to display plot interactively
+
+        # Here you would typically select one or more solutions from the Pareto front
+        # for further evaluation on the test set.
+        # For simplicity, let's pick the one with the lowest MPJPE for a quick check (not ideal for multi-objective)
+        best_mpjpe_idx = np.argmin(results.F[:, 0])
+        selected_solution_X = results.X[best_mpjpe_idx]
+        selected_solution_F = results.F[best_mpjpe_idx]
+        console.print(f"\nExample solution (lowest MPJPE): Objectives = {selected_solution_F}")
+
+        # Decode the selected solution to see C1, S, B (optional)
+        # selected_genome = Genome.from_flat_representation(selected_solution_X, source_dim_cfg, target_dim_cfg)
+        # console.print(f"  Decoded C1 matrix (sample): \n{selected_genome.C1[:2,:5]}") # Print a small part
+
+        # TODO: Implement evaluation of selected solution(s) on the test set (source_test, target_test)
+        # This would involve using the `transform_source_to_target` function with the selected_genome
+        # and calculating MPJPE and temporal consistency on the test data.
+
     else:
-        console.print(f"[yellow]Loading all CSV files from folder[/yellow]")
-        dataframe = load_all_csvs_from_folder(data_folder)
+        console.print("[yellow]No solutions found or optimization did not run correctly.[/yellow]")
 
-    if dataframe is not None:
-        console.print(f"[green]✓ Data loaded: [/green][cyan]{len(dataframe)} rows, {len(dataframe.columns)} columns[/cyan]")
-        
-        # 2. Preprocess Data
-        console.print(Panel("[bold magenta]--- Starting Preprocessing ---[/bold magenta]", border_style="magenta"))
-        target_column = config['data_loader']['target_column'] 
-        console.print(f"[magenta]Target column: [bold]{target_column}[/bold][/magenta]")
-        
-        with console.status("[bold magenta]Preprocessing data...[/bold magenta]", spinner="dots"):
-            X_train, X_test, y_train, y_test = preprocess_data(dataframe, target_column, verbose=config["settings"].get("verbose", 0))
-            
-            # Check for data leakage - keep this important check
-            if target_column in X_train.columns:
-                console.print(f"[bold red]LEAKAGE ALERT: Target column '{target_column}' found in X_train![/bold red]")
-            if target_column in X_test.columns:
-                console.print(f"[bold red]LEAKAGE ALERT: Target column '{target_column}' found in X_test![/bold red]")
-        
-        # Show only important correlations if verbose
-        if config["settings"].get("verbose", 0) > 0:
-            correlations = X_train.corrwith(y_train.astype(float))
-            console.print("[yellow]Top correlations with target:[/yellow]")
-            console.print(correlations.abs().sort_values(ascending=False).head(5))
-        
-        console.print("[green]✓ Preprocessing completed[/green]")
-
-        # Convert target to int if possible
-        try:
-            y_train = y_train.astype(int)
-            y_test = y_test.astype(int)
-        except Exception as e:
-            console.print(f"[yellow]⚠️ Warning: Unable to convert target to integer format[/yellow]")
-
-        # 3. Feature Selection
-        if config["settings"].get("feature_selection", True):
-            console.print(Panel("[bold yellow]--- Feature Selection with GA ---[/bold yellow]", border_style="yellow"))
-            
-            # Get GA parameters from config
-            ga_params = config.get('genetic_algorithm', {}).get('params', {})
-            
-            # Initialize and run GA
-            with console.status("[bold cyan]Running genetic algorithm...[/bold cyan]", spinner="dots"):
-                ga_selector = GeneticFeatureSelector(
-                    X_train=X_train, 
-                    y_train=y_train,
-                    population_size=ga_params.get('popolazione', 50),
-                    generations=ga_params.get('generazioni', 30),
-                    crossover_prob=ga_params.get('crossover_prob', 0.7),
-                    mutation_prob=ga_params.get('mutation_prob', 0.2),
-                    accuracy_weight=ga_params.get('accuracy_weight', 0.6),
-                    feature_count_weight=ga_params.get('feature_count_weight', 0.2),
-                    correlation_weight=ga_params.get('correlation_weight', 0.2)
-                )
-                
-                selected_features = ga_selector.run()
-                console.print(f"[green]✓ GA completed: [cyan]{len(selected_features)} features selected[/cyan][/green]")
-            
-            if config["settings"].get("verbose", 0) > 0:
-                ga_selector.plot_fitness_history()
-                
-            # Filter features
-            X_train = X_train[selected_features]
-            X_test = X_test[selected_features] 
-        
-        # 4. Train and evaluate models
-        console.print(Panel("[bold blue]--- Training & Evaluating Model ---[/bold blue]", border_style="blue"))
-        
-        model_config_yaml = config.get('model', {})
-        cv_config_yaml = config.get('cross_validation', {})
-
-        if not model_config_yaml.get('type'):
-            console.print("[bold red]ERROR: Model type not specified in configuration (model.type).[/bold red]", style="red")
-            exit(1)
-
-        trained_model, conf_matrix, test_accuracy, class_report_dict = train_and_evaluate_model(
-            X_train, X_test, y_train, y_test,
-            model_config_yaml,
-            cv_config_yaml,
-            console
-        )
-        
-        # Show feature importances if available
-        if trained_model and hasattr(trained_model, 'feature_importances_'):
-            importances = pd.DataFrame({
-                'feature': X_train.columns,
-                'importance': trained_model.feature_importances_
-            }).sort_values('importance', ascending=False)
-            console.print("[yellow]Top feature importances:[/yellow]")
-            console.print(importances.head(5))
-        
-    else:
-        console.print(Panel(f"[bold red]Pipeline aborted due to error loading data from '{data_folder}'.[/bold red]", 
-                            border_style="red"))
-
-    console.print(Panel("[bold blue]Multiclass classification pipeline completed.[/bold blue]", border_style="blue"))
+    console.print(Panel("[bold blue]Pose Retargeting Pipeline completed.[/bold blue]", border_style="blue"))
 
 
 if __name__ == "__main__":
-    warnings.filterwarnings("ignore")
+    warnings.filterwarnings("ignore", category=UserWarning) # Pymoo might raise some user warnings
+    warnings.filterwarnings("ignore", category=RuntimeWarning) 
     
-    # Check if the config file exists
     if not os.path.exists('config.yaml'):
         console.print("[bold red]ERROR:[/bold red] Configuration file 'config.yaml' does not exist.", style="red")
         exit(1)
     
-    main()
+    main_pose_retargeting()
