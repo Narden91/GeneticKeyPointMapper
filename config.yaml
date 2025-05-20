@@ -1,5 +1,5 @@
 settings:
-  verbose: 0 # 0: minimal, 1: basic EA output
+  verbose: 0 # 0: minimal, 1: basic 2: extended
   global_random_seed: 42
 
 # --- POSE RETARGETING ---
@@ -17,14 +17,14 @@ pose_retargeting:
   # movement_filter: ["F-JUMP", "F_T-JUMP"]     # Standard jumps and T-jumps
   # movement_filter: ["A-POSE", "F-GAIT", "F-RUNNING"]
   # movement_filter: []                         # Load all movements
-  movement_filter: ["F-JUMP"] 
+  movement_filter: ["GAIT"] 
   
   # Subject-based train/test split
   # Option 1: Ratio (subjects will be randomly split)
-  train_subject_ratio: 0.8 
+  # train_subject_ratio: 0.8 
   # Option 2: Explicit lists 
-  # train_subjects: ["TDB_001_F", "TDB_002_M"] 
-  # test_subjects: ["TDB_003_F"]
+  train_subjects: ["TDB_001_F", "TDB_002_F", "TDB_003_M", "TDB_005_F", "TDB_006_M", "TDB_007_M", "TDB_008_M", "TDB_009_M", "TDB_010_F", "TDB_012_M", "TDB_013_M", "TDB_014_M", "TDB_015_M", "TDB_016_M", "TDB_017_F", "TDB_018_M", "TDB_019_M", "TDB_020_F", "TDB_021_M", "TDB_022_M", "TDB_023_M", "TDB_024_F", "TDB_025_F", "TDB_026_M", "TDB_027_F", "TDB_029_F", "TDB_030_M", "TDB_031_F", "TDB_033_F", "TDB_034_M", "TDB_036_F", "TDB_039_F", "TDB_040_F", "TDB_043_F", "TDB_044_F", "TDB_045_F", "TDB_046_F", "TDB_047_F", "TDB_048_F", "TDB_062_F", "TDB_063_F", "TDB_064_F", "TDB_065_M", "TDB_066_F", "TDB_067_F", "TDB_068_F", "TDB_069_M", "TDB_070_M", "TDB_050_F", "TDB_051_M", "TDB_052_M", "TDB_054_F", "TDB_056_M", "TDB_057_M", "TDB_058_M", "TDB_059_M", "TDB_060_M"]
+  test_subjects: ["TDB_004_F", "TDB_011_M", "TDB_028_M", "TDB_032_F", "TDB_035_F", "TDB_037_M", "TDB_038_M", "TDB_041_F", "TDB_042_F", "TDB_049_F", "TDB_053_M", "TDB_055_M", "TDB_061_M", "TDB_071_F"]
 
   preprocessing:
     normalization_range: [0, 1] # (min, max) for coordinate scaling, or null to skip

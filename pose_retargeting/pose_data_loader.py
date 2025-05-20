@@ -85,7 +85,51 @@ def preprocess_sequence_data(sequence, normalization_range=None):
     return sequence.astype(np.float32)
 
 
-def load_pose_data(config):
+def _remove_all_minus_one_frames_synced(
+    seq1: np.ndarray, 
+    seq2: np.ndarray, 
+    filename_info: str = "", 
+    verbose_level: int = 0
+) -> tuple[np.ndarray | None, np.ndarray | None]:
+    """
+    Removes frames where all values are -1.0, synchronized across two sequences.
+    Assumes seq1 and seq2 have already been truncated to the same number of frames.
+    Returns cleaned (seq1, seq2), or (None, None) if resulting sequences are empty.
+    """
+    if seq1.shape[0] == 0: 
+        return None, None
+
+    # A frame is considered "valid" if AT LEAST ONE of its coordinate values is NOT -1.0.
+    # Conversely, a frame is "invalid" if ALL its coordinate values ARE -1.0.
+    
+    # Reshape to (num_frames, num_keypoints * 3) to check all values in a frame easily
+    seq1_reshaped = seq1.reshape(seq1.shape[0], -1)
+    seq2_reshaped = seq2.reshape(seq2.shape[0], -1)
+
+    # Create a boolean mask for valid frames in seq1
+    # True if frame is valid (i.e., np.any returns True if any element is != -1.0)
+    seq1_valid_frames_mask = np.any(seq1_reshaped != -1.0, axis=1)
+    
+    # Create a boolean mask for valid frames in seq2
+    seq2_valid_frames_mask = np.any(seq2_reshaped != -1.0, axis=1)
+    
+    # A frame must be valid in BOTH sequences to be kept
+    common_valid_mask = seq1_valid_frames_mask & seq2_valid_frames_mask
+    
+    seq1_filtered = seq1[common_valid_mask]
+    seq2_filtered = seq2[common_valid_mask]
+
+    num_frames_removed = seq1.shape[0] - seq1_filtered.shape[0]
+    if num_frames_removed > 0 and verbose_level > 1: 
+        console.print(f"      [grey50]Removed {num_frames_removed} invalid frames (all -1s) from {filename_info}[/grey50]")
+
+    if seq1_filtered.shape[0] == 0: 
+        return None, None
+        
+    return seq1_filtered, seq2_filtered
+
+
+def load_pose_data(config, verbose=0):
     """
     Loads source (KP3D) and target (AL) pose data based on config.
     Performs train/test split by subject and filters by movement.
@@ -138,8 +182,8 @@ def load_pose_data(config):
         console.print("[bold red]Error: No train/test split strategy defined for subjects in config.[/bold red]")
         return [], [], [], []
 
-    console.print(f"Training subjects: {train_subject_ids}")
-    console.print(f"Testing subjects: {test_subject_ids}")
+    console.print(f"Training subjects: {train_subject_ids}") if verbose > 0 else None
+    console.print(f"Testing subjects: {test_subject_ids}") if verbose > 0 else None
 
     source_train, target_train = [], []
     source_test, target_test = [], []
@@ -147,7 +191,7 @@ def load_pose_data(config):
     def process_subjects(subject_list, source_data_list, target_data_list, subject_type_str):
         console.print(f"\n[bold green]Processing {subject_type_str} subjects...[/bold green]")
         for subject_id in subject_list:
-            console.print(f"  Subject: [cyan]{subject_id}[/cyan]")
+            console.print(f"  Subject: [cyan]{subject_id}[/cyan]") if verbose > 0 else None
             subject_folder_path = os.path.join(data_base_path, subject_id)
             
             all_files = glob.glob(os.path.join(subject_folder_path, f"*{source_suffix}")) # Only look for source files initially
@@ -162,23 +206,47 @@ def load_pose_data(config):
                     if movement_type is None or movement_type not in movement_filters:
                         continue 
                 
-                # Try to find matching target file
                 base_name = filename.replace(source_suffix, "")
                 target_file_name = base_name + target_suffix
                 target_file_path = os.path.join(subject_folder_path, target_file_name)
 
                 if os.path.exists(target_file_path):
-                    console.print(f"    Loading pair for movement '{movement_type}': [cyan]{filename}[/cyan] & [cyan]{target_file_name}[/cyan]")
-                    source_seq = load_csv_to_3d_array(source_file_path, source_kp)
-                    target_seq = load_csv_to_3d_array(target_file_path, target_kp)
+                    console.print(f"    Loading pair for movement '{movement_type}': [cyan]{filename}[/cyan] & [cyan]{target_file_name}[/cyan]") if verbose > 1 else None
+                    source_seq_raw = load_csv_to_3d_array(source_file_path, source_kp)
+                    target_seq_raw = load_csv_to_3d_array(target_file_path, target_kp)
 
-                    if source_seq is not None and target_seq is not None:
-                        min_frames = min(source_seq.shape[0], target_seq.shape[0])
-                        if min_frames == 0:
-                            console.print(f"      [yellow]Skipping pair due to zero frames after alignment: {filename}[/yellow]")
+                    if source_seq_raw is not None and target_seq_raw is not None:
+                        # Step 1: Ensure raw sequences have the same number of frames by truncating to the shorter one.
+                        if source_seq_raw.shape[0] != target_seq_raw.shape[0]:
+                            console.print(f"      [yellow]Warning: Raw sequences for {filename}/{target_file_name} have different frame counts ({source_seq_raw.shape[0]} vs {target_seq_raw.shape[0]}). Truncating to shortest.[/yellow]")
+                            min_initial_frames = min(source_seq_raw.shape[0], target_seq_raw.shape[0])
+                            if min_initial_frames == 0:
+                                console.print(f"      [yellow]Skipping pair {filename} due to zero frames initially.[/yellow]")
+                                continue
+                            source_seq_raw = source_seq_raw[:min_initial_frames]
+                            target_seq_raw = target_seq_raw[:min_initial_frames]
+                        
+                        # Step 2: Remove frames that are "all -1.0" from both sequences synchronously.
+                        source_seq_filtered, target_seq_filtered = _remove_all_minus_one_frames_synced(
+                            source_seq_raw,
+                            target_seq_raw,
+                            filename_info=f"{filename}/{target_file_name}",
+                            verbose_level=verbose 
+                        )
+
+                        if source_seq_filtered is None or target_seq_filtered is None:
+                            console.print(f"      [yellow]Skipping pair {filename}/{target_file_name} due to zero frames after filtering 'all -1s' rows.[/yellow]")
                             continue
-                        source_seq = source_seq[:min_frames]
-                        target_seq = target_seq[:min_frames]
+                        
+                        # source_seq_filtered and target_seq_filtered contain valid, synchronized frames.
+                        # Their lengths are guaranteed to be equal by _remove_all_minus_one_frames_synced.
+                        source_seq = source_seq_filtered
+                        target_seq = target_seq_filtered
+                        
+                        # The min_frames check is now simpler as sequences are already aligned and filtered.
+                        if source_seq.shape[0] == 0: 
+                            console.print(f"      [yellow]Skipping pair {filename} (final check) due to zero frames.[/yellow]")
+                            continue
                         
                         norm_range = pr_config['preprocessing'].get('normalization_range')
                         source_seq_proc = preprocess_sequence_data(source_seq, norm_range)

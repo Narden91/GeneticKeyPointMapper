@@ -64,7 +64,7 @@ def main():
             console.print(f"[yellow]Warning: Could not remove old log file: {e}[/yellow]")
 
     log_message(Panel.fit("[bold blue]Starting Pose Retargeting Pipeline with NSGA-III...[/bold blue]", border_style="blue"))
-
+    
     config_path = 'config.yaml'
     config = None
     try:
@@ -85,13 +85,15 @@ def main():
         log_message("[bold red]CRITICAL: Configuration not loaded. Aborting.[/bold red]")
         exit(1)
 
+    verbose = config.get('settings', {}).get('verbose', 0)
+    
     log_message(Panel("[yellow]📂 Loading and Preprocessing Pose Data...[/yellow]", border_style="yellow"))
     pr_config = config.get('pose_retargeting')
     if not pr_config:
         log_message("[bold red]ERROR: 'pose_retargeting' section missing in config.yaml[/bold red]")
         exit(1)
 
-    source_train, target_train, source_test, target_test = load_pose_data(config)
+    source_train, target_train, source_test, target_test = load_pose_data(config, verbose)
 
     if not source_train or not target_train: # Check if training data is loaded
         log_message("[bold red]ERROR: Training data (source_train or target_train) is empty. Aborting.[/bold red]")
@@ -105,7 +107,7 @@ def main():
     log_message(Panel("[magenta]🧬 Defining Optimization Problem...[/magenta]", border_style="magenta"))
     source_dim_cfg = (pr_config['source_num_keypoints'], 3)
     target_dim_cfg = (pr_config['target_num_keypoints'], 3)
-
+    
     genome_bounds_cfg = config.get('genome_definition')
     if not genome_bounds_cfg:
         log_message("[bold red]ERROR: 'genome_definition' section missing in config.yaml[/bold red]")
@@ -180,13 +182,10 @@ def main():
         if len(results.F) > 2: 
             # Find a compromise solution (e.g., median f1 after sorting, ensuring it's distinct)
             # This example compromise logic might need to be smarter depending on front shape
-            # For simplicity, let's pick one near the "knee" or middle if sorted by f1.
-            # The original logic for compromise might be okay, or we can refine.
-            # Let's keep the original logic for compromise for now for simplicity.
+            # For simplicity, pick one near the "knee" or middle if sorted by f1.
             sorted_indices_f1_original = np.argsort(results.F[:, 0])
             # Try to pick a compromise solution that is not the best MPJPE one.
             # This could be the median of sorted by f1, or median of sorted by f2, or other heuristic.
-            # For this example, let's use a point around the middle of the f1-sorted front.
             compromise_idx_candidate_orig_idx = sorted_indices_f1_original[len(sorted_indices_f1_original) // 2]
             
             if compromise_idx_candidate_orig_idx != best_mpjpe_idx :
