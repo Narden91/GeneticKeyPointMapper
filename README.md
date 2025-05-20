@@ -1,216 +1,215 @@
-# Evolutionary Pose Retargeting System for Markerless Gait Analysis
+# Evolutionary Pose Retargeting System for Markerless Gait Analysis 🚶‍♀️➡️🤖
 
 ## Overview
 
-This system uses evolutionary algorithms to automatically learn how to map 3D human pose data from one representation system to another, specifically designed for markerless human movement and gait analysis applications. By using multi-objective optimization techniques (specifically NSGA-III), it finds efficient ways to translate between different skeletal structures with varying numbers of keypoints without requiring physical markers on subjects.
+This system uses evolutionary algorithms 🧬 to automatically learn how to map 3D human pose data from one representation system to another, specifically designed for markerless human movement and gait analysis applications. By using multi-objective optimization techniques (specifically NSGA-III), it finds efficient ways to translate between different skeletal structures with varying numbers of keypoints without requiring physical markers on subjects. The system also incorporates Bayesian Optimization (using Hyperopt with Tree-structured Parzen Estimators - TPE 🧐) to provide insights into optimal hyperparameters for the NSGA-III algorithm, further enhancing its performance and adaptability.
 
-## Problem Statement
+## Problem Statement ❓
 
 In clinical gait analysis and human movement research, there's an increasing shift from traditional marker-based systems to markerless video-based approaches:
-- Converting from a simple skeleton (e.g., from markerless video tracking with 33 keypoints) to a detailed biomechanical model (e.g., with 54 keypoints needed for clinical analysis)
-- Enabling analysis of movements captured with accessible camera systems instead of expensive specialized equipment
+- Converting from a simple skeleton (e.g., from markerless video tracking with 33 keypoints) to a detailed biomechanical model (e.g., with 54 keypoints needed for clinical analysis) 💀➡️🦴
+- Enabling analysis of movements captured with accessible camera systems 📸 instead of expensive specialized equipment
 - Making gait and movement data from video recordings compatible with clinical assessment tools and biomechanical models
 
-Manual retargeting between these different representation systems is time-consuming, requires specialized expertise, and introduces human bias. This system automates the process using machine learning while maintaining clinical-grade accuracy.
+Manual retargeting between these different representation systems is time-consuming, requires specialized expertise, and introduces human bias. This system automates the process using machine learning 🧠 while maintaining clinical-grade accuracy.
 
-## How It Works
+## How It Works ⚙️
 
-### 1. Input Data
+### 1. Input Data 💾
 The system requires paired examples of the same movements in both source and target formats:
 - Source format (KP3D): CSV files containing 3D coordinates (x,y,z) for each keypoint from markerless video tracking systems over time
 - Target format (AL): CSV files containing 3D coordinates for the corresponding anatomical landmarks in a biomechanical model
 - File naming convention: `SubjectID__MovementType__Format.csv` (e.g., `TDB_001_F__F-JUMP__KP3D.csv` for source and `TDB_001_F__F-JUMP__AL.csv` for target)
 
 The system is specifically designed to work with human movement data from different gait analysis modalities. It can process various movement types including:
-- Standard walking gait (F-GAIT)
-- Running (F-RUNNING)
-- Jumping (F-JUMP)
-- Static anatomical poses (A-POSE)
+- Standard walking gait (F-GAIT) 🚶
+- Running (F-RUNNING) 🏃‍♀️
+- Jumping (F-JUMP) 🤸
+- Static anatomical poses (A-POSE)🧍
 
-A detailed configuration file also guides the system, specifying data paths, keypoint numbers, movement filters, optimization parameters, and subject information for train/test splits.
+A detailed configuration file (`config.yaml` 📄) also guides the system, specifying data paths, keypoint numbers, movement filters, optimization parameters, hyperparameter tuning settings, and subject information for train/test splits.
 
-### 2. Data Preprocessing
+### 2. Data Preprocessing 🧼
 Before training, the raw input data undergoes several preparation steps:
-1.  **Loading & Parsing:** CSV files are read and structured into numerical arrays representing sequences of 3D poses.
-2.  **Pairing & Filtering:** Source and target files representing the same motion are paired. Sequences can be filtered by movement type based on configuration.
-3.  **Frame Synchronization:** If paired sequences have different numbers of frames, they are typically truncated to the shorter length.
-4.  **Missing Data Handling:**
-    *   Frames with entirely missing data (e.g., marked by specific placeholder values) might be removed.
-    *   Interpolation techniques can be used to fill in missing values within a sequence.
-5.  **Normalization (Optional):** Pose coordinates can be normalized (e.g., by subject height) to make the learned transformation more robust to variations in subject size.
-6.  **Train/Test Split:** Subjects are divided into training and testing sets. This step typically occurs after identifying all available data but before the main optimization loop, ensuring the model is trained on one subset of subjects and tested on another unseen subset.
+1.  **Loading & Parsing:** CSV files are read and structured into numerical arrays.
+2.  **Pairing & Filtering:** Source and target files are paired. Sequences can be filtered by movement type.
+3.  **Frame Synchronization:** Sequences are truncated to the shorter length if frame counts differ.
+4.  **Missing Data Handling:** Frames with missing data might be removed or values interpolated.
+5.  **Normalization (Optional):** Pose coordinates can be normalized (e.g., by subject height).
+6.  **Train/Test Split:** Subjects are divided into training and testing sets.
 
-### 3. Transformation Model
-The core of the system is a mathematical transformation that converts source poses from markerless video tracking to biomechanically accurate target poses:
-
+### 3. Transformation Model 📐
+The core of the system is a mathematical transformation:
 ```
 TargetPose = (C1 × SourcePose) × S + B
 ```
-
 Where:
-- **C1**: Correspondence matrix - determines which source keypoints influence which target anatomical landmarks
-- **S**: Scaling factors - adjusts the magnitude of translated points to account for differences in skeletal proportions
-- **B**: Bias vectors - applies position offsets to translated points to align with anatomical reference frames
+- **C1**: Correspondence matrix
+- **S**: Scaling factors
+- **B**: Bias vectors
+These parameters form the "genome" evolved by the system.
 
-Together, these parameters form the "genome" that the system evolves to find optimal transformations between the markerless tracking data and clinically relevant biomechanical landmarks.
+### 4. Hyperparameter Optimization (Optional - Hyperopt TPE) 🔮
+Before the main evolutionary run, the system can optionally perform Bayesian Optimization using Hyperopt with Tree-structured Parzen Estimators (TPE) to find promising hyperparameters for NSGA-III.
+1.  **Define Search Space**: NSGA-III hyperparameters (e.g., population size, crossover/mutation rates) and their ranges are defined in `config.yaml`.
+2.  **Objective Function**: For each hyperparameter set, a shorter, faster NSGA-III run is performed. Its performance becomes the "loss" for TPE to minimize.
+3.  **Iterative Search**: TPE iteratively suggests new configurations to find better hyperparameter regions.
+4.  **Output**: The best hyperparameters found are used for the main NSGA-III run.
 
-### 4. Evolutionary Optimization (NSGA-III)
-The system uses evolutionary algorithms to find the best transformation parameters:
+### 5. Evolutionary Optimization (NSGA-III) 🚀
+The system uses NSGA-III to find the best transformation parameters (C1, S, B):
+1. **Initialization**: Create a random population of transformation parameters.
+2. **Evaluation**: Assess each transformation based on:
+   - **Accuracy** (MPJPE - Mean Per Joint Position Error) 🎯
+   - **Temporal Consistency** (Movement smoothness) 🌊
+3. **Selection**: Keep the best-performing transformations.
+4. **Variation**: Create new transformations (crossover & mutation).
+5. **Iteration**: Repeat for many generations.
 
-1. **Initialization**: Create a population of random transformation parameters
-2. **Evaluation**: Assess each transformation based on two objectives crucial for clinical gait analysis:
-   - **Accuracy** (MPJPE - Mean Per Joint Position Error): How closely the transformed pose matches the anatomical landmarks needed for clinical analysis
-   - **Temporal Consistency**: How smoothly the transformed poses flow over time, ensuring natural movement patterns without artifacts
-3. **Selection**: Keep the best-performing transformations that preserve clinical features
-4. **Variation**: Create new transformations through:
-   - Crossover: Combining pieces of successful transformations
-   - Mutation: Making small random changes to parameters
-5. **Iteration**: Repeat for many generations to evolve increasingly effective transformations
+The multi-objective approach finds solutions that balance accuracy and smoothness.
 
-The multi-objective approach (NSGA-III) finds solutions that balance anatomical accuracy and movement smoothness rather than sacrificing one for the other - essential for valid clinical assessments.
-
-## Project Structure
+## Project Structure 📂
 
 ```
-├── main.py                  # Main execution script
-├── config.yaml              # Configuration file
+├── main.py                     # Main execution script
+├── config.yaml                 # Configuration file
 ├── pose_retargeting/
-│   ├── evolutionary_runner.py     # NSGA-III implementation
-│   ├── genome_and_transform.py    # Transformation model
-│   ├── pose_data_loader.py        # Data loading and preprocessing
-│   └── retargeting_problem.py     # Problem definition
-├── data/                    # Pose data files
-│   ├── TDB_001_F/           # Data for subject 1
-│   │   ├── TDB_001_F__F-JUMP__KP3D.csv  # Source pose data
-│   │   └── TDB_001_F__F-JUMP__AL.csv    # Target pose data
+│   ├── __init__.py
+│   ├── evolutionary_runner.py    # NSGA-III implementation
+│   ├── genome_and_transform.py   # Transformation model
+│   ├── pose_data_loader.py       # Data loading and preprocessing
+│   └── retargeting_problem.py    # Problem definition for NSGA-III
+├── bayesian_evo_opt/             # Bayesian hyperparameter optimization
+│   ├── __init__.py
+│   └── optimizer.py              # Hyperopt TPE implementation
+├── data/                       # Pose data files (example)
+│   ├── TDB_001_F/
+│   │   ├── TDB_001_F__F-JUMP__KP3D.csv
+│   │   └── TDB_001_F__F-JUMP__AL.csv
 │   └── ...
-└── reports/                 # Output files
-    ├── evolution_log.txt           # Log of the optimization process
-    ├── evolution_history.pkl       # Saved optimization history
-    └── pareto_front_plot.png       # Visualization of solution trade-offs
+└── reports/                    # Output files
+    ├── evolution_log.txt              # Log of the optimization process
+    ├── evolution_history.pkl          # Saved NSGA-III optimization history
+    ├── pareto_front_plot.png          # Visualization of NSGA-III solutions
+    └── bo_hyperopt_trials.csv         # (If BO run) CSV of TPE trials
 ```
 
-## Usage
+## Usage 🛠️
 
 ### Prerequisites
-- Python 3.7+
-- Required packages: pymoo, numpy, matplotlib, pandas, rich, scikit-learn, PyYAML
+- Python 3.10+ 🐍
+- Required packages: pymoo, numpy, matplotlib, pandas, rich, scikit-learn, PyYAML, **hyperopt**
 
 ### Setup
-1. Clone the repository
+1. Clone the repository: `git clone ...`
 2. Install required packages: `pip install -r requirements.txt`
-3. Organize your pose data in the `data/` directory following the expected structure:
-   - Source data should be keypoint data from markerless tracking systems
-   - Target data should be the corresponding anatomical landmarks
+3. Organize your pose data in the `data/` directory.
 
 ### Configuration
-Edit `config.yaml` to customize:
+Edit `config.yaml` 📄 to customize:
 - Data paths and formats
-- Number of keypoints in source (KP3D) and target (AL) representations
-- Specific movement types to analyze (e.g., F-JUMP, F-GAIT, F-RUNNING)
-- Optimization parameters (population size, generations, etc.)
-- Genome parameter bounds to reflect biomechanical constraints
+- Keypoint numbers
+- Movement types
+- **Bayesian Optimization settings** (`bayesian_optimizer_settings`):
+    - `run_bayesian_opt`: (true/false)
+    - `max_evals_bo`: Number of TPE evaluations.
+    - `search_space`: NSGA-III hyperparameter ranges.
+    - `base_nsga3_config_for_bo_eval`: Config for short NSGA-III runs during TPE.
+- **NSGA-III parameters** (`nsga3_optimizer`).
+- Genome parameter bounds.
 
 ### Running the System
 ```bash
 python main.py
 ```
-
 The system will:
-1. Load and preprocess the motion capture data
-2. Define the optimization problem based on keypoint mapping
-3. Run the NSGA-III evolutionary algorithm to find optimal transformations
-4. Generate reports and visualizations of the results in the `reports/` directory
+1. Load and preprocess data. 🔢
+2. (Optional) Run Hyperopt TPE for NSGA-III hyperparameter tuning. ⚙️
+3. Define the optimization problem.
+4. Run NSGA-III to find optimal transformations. 🏆
+5. Generate reports. 📊
 
-## Output and Results
+## Output and Results 📊📈
 
-The system generates several key outputs to help users understand and utilize the learned transformations:
-- **Performance Reports:** Visualizations like the Pareto front and evolution progress plots, detailed log files, and a saved history of the optimization process.
-- **Optimized Solutions:** The parameters for the best-performing transformations and their associated performance metrics.
+- **Bayesian Optimization Report (if run):**
+    - `bo_hyperopt_trials.csv`: CSV in `reports/` with TPE trial details.
+    - Console logs.
+- **NSGA-III Performance Reports:**
+    - Visualizations (Pareto front, evolution progress - if plotting enabled).
+    - `evolution_log.txt`: NSGA-III log.
+    - `evolution_history.pkl`: NSGA-III history.
+- **Optimized Solutions:** Transformation parameters (C1, S, B) and their scores.
 
-### 1. Pareto Front Plot
-The system produces a plot showing the trade-off between anatomical accuracy (MPJPE) and temporal consistency:
-- Each point represents a different possible transformation solution
-- Lower values on both axes are better for clinical applications
-- Points are labeled with solution indices for reference
-- The plot helps clinicians and researchers select the most appropriate transformation for their specific analysis needs
+### 1. Pareto Front Plot (NSGA-III)
+If plotting is enabled, shows the accuracy (MPJPE) vs. temporal consistency trade-off.
 
 ### 2. Solution Parameters
-For selected solutions, the system provides:
-- Performance metrics (MPJPE and temporal consistency scores)
-- Transformation parameters (C1, S, B matrices) that define the mapping from markerless tracking to anatomical landmarks
+For selected solutions: performance metrics and transformation matrices (C1, S, B).
 
 ### 3. Using the Results
-After optimization, you can:
-- Select a solution that offers your preferred balance between anatomical accuracy and movement smoothness
-- Apply the transformation to new markerless tracking data using the `transform_source_to_target()` function in `genome_and_transform.py`
-- Perform clinical gait analysis on the transformed data, including:
-  - Joint angle calculations
-  - Stride analysis
-  - Kinematic assessments
-  - Pathological gait pattern identification
+- Select a solution.
+- Apply to new data via `transform_source_to_target()`.
+- Perform clinical gait analysis. 🩺
 
 ## Example Configuration
 
 ```yaml
-# Example configuration for gait analysis application
+# Example config.yaml entries
+settings:
+  verbose: 1
+  global_random_seed: 42
+
 pose_retargeting:
-  source_num_keypoints: 33  # Standard for many markerless video tracking systems
-  target_num_keypoints: 54  # Detailed anatomical landmark model
-  movement_filter: ["F-GAIT", "F-RUNNING"]  # Focus on locomotion patterns
-  
-  # Subject-based train/test split
-  train_subject_ratio: 0.8  # Use 80% of subjects for training
+  source_num_keypoints: 33
+  target_num_keypoints: 54
+  # ...
+
+bayesian_optimizer_settings:
+  run_bayesian_opt: true
+  max_evals_bo: 30
+  # ... search_space ...
+  base_nsga3_config_for_bo_eval:
+    num_generations: 8
 
 nsga3_optimizer:
   population_size: 100
   num_generations: 50
-  
-  # Objective weights for final solution selection (Note: NSGA-III doesn't directly use weights for Pareto optimality,
-  # but these could guide post-optimization selection or a weighted-sum approach if used differently)
-  objective_weights:
-    accuracy: 1.0             # Prioritize anatomical accuracy
-    temporal_consistency: 0.5 # Still consider smoothness but with lower weight
+  # ...
 ```
 
-## Customization
+## Customization 🎨
+- Focus on specific movement types.
+- Adjust train/test splits.
+- Modify transformation model.
+- Add new evaluation metrics.
+- Tune algorithm parameters.
 
-The system can be adapted for different clinical applications:
-- Focus on specific movement types relevant to particular pathologies
-- Adjust the train/test split to handle various patient populations
-- Modify the transformation model to account for specific anatomical constraints
-- Add new evaluation metrics for specialized clinical assessments
-- Tune the evolutionary algorithm parameters to optimize for specific gait patterns
+## Clinical Applications ⚕️
+- Rehabilitation Assessment
+- Sports Medicine ⚽
+- Orthopedic Evaluation
+- Neurological Assessment (e.g., Parkinson's)
+- Pediatric Gait Analysis 👶
+- Remote Monitoring 🏠
 
-## Clinical Applications
+## Troubleshooting 🛠️🆘
+- Data loading: Check file names/formats.
+- Memory issues: Reduce sequences/frames, or TPE subset ratio.
+- Poor results:
+    - NSGA-III: Increase population/generations.
+    - Bayesian Opt: Increase `max_evals_bo`, adjust `base_nsga3_config_for_bo_eval`.
+- Subject variability: Ensure diverse training data.
 
-This system can benefit various clinical and research applications:
-- **Rehabilitation Assessment**: Track patient progress over time with affordable markerless systems
-- **Sports Medicine**: Analyze athletic movements without restrictive markers
-- **Orthopedic Evaluation**: Assist in pre/post-surgical assessment of gait
-- **Neurological Assessment**: Quantify movement disorders like Parkinson's or cerebellar ataxia
-- **Pediatric Gait Analysis**: Enable child-friendly assessment without the need for marker attachment
-- **Remote Monitoring**: Allow for at-home gait assessment using consumer cameras
-
-## Troubleshooting
-
-Common issues:
-- Data loading problems: Check file formats and naming conventions (should follow TDB_XXX_X__MOVEMENT-TYPE__FORMAT.csv)
-- Memory issues: Reduce the number of sequences or frames processed
-- Poor results: Increase population size or number of generations, adjust genome parameter bounds
-- Subject variability: Ensure training data includes diverse subject characteristics if targeting heterogeneous populations
-
-## Future Directions
-
-Potential enhancements to the system:
-- **Real-time Processing**: Optimize the transformation for real-time clinical feedback
-- **Additional Modalities**: Extend to support other markerless tracking systems and clinical models
-- **Pathology-specific Models**: Develop specialized transformations for specific movement disorders
+## Future Directions 🚀
+- Real-time Processing ⏱️
+- Support for Additional Modalities
+- Pathology-specific Models
 
 ## Authors
 
-Emanuele Nardone/ Cesare Davide Pace
+Emanuele Nardone / Cesare Davide Pace 
 
-## Acknowledgements
+## Acknowledgements 🙏
 
-This project uses the NSGA-III algorithm implementation from the pymoo library and is designed to advance the field of markerless human movement analysis for clinical applications.
+This project uses **pymoo** (NSGA-III) and **Hyperopt** (TPE).
+For a conceptual understanding of TPE: [Building a Tree-structured Parzen Estimator (from scratch, kind of)](https://towardsdatascience.com/building-a-tree-structured-parzen-estimator-from-scratch-kind-of-20ed31770478) 📖.
