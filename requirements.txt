@@ -1,6 +1,8 @@
-PyYAML
-pandas
-scikit-learn
-
-matplotlib
 pymoo
+numpy
+matplotlib
+pandas
+rich
+scikit-learn
+PyYAML
+hyperopt

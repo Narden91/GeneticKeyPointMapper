@@ -13,6 +13,7 @@ from pose_retargeting.pose_data_loader import load_pose_data
 from pose_retargeting.retargeting_problem import PoseRetargetingProblem
 from pose_retargeting.evolutionary_runner import EvolutionaryRunner
 from pose_retargeting.genome_and_transform import Genome
+from bayesian_evo_opt.optimizer import BayesianHyperparameterOptimizer
 
 
 console = Console()
@@ -104,6 +105,39 @@ def main():
          log_message(f"  Example train source sequence shape: {source_train[0].shape}")
          log_message(f"  Example train target sequence shape: {target_train[0].shape}")
 
+    
+    # --- Bayesian Optimization for Hyperparameters ---
+    bo_settings = config.get('bayesian_optimizer_settings') # Ensure this key matches your config
+    if bo_settings and bo_settings.get('run_bayesian_opt'):
+        log_message(Panel("[purple]⚙️ Running Bayesian Optimization (Hyperopt TPE) for NSGA-III Hyperparameters...[/purple]", border_style="purple"))
+        
+        if 'nsga3_optimizer' not in config:
+            log_message("[bold red]ERROR: 'nsga3_optimizer' section missing in config.yaml, needed for Bayesian Optimization base. Aborting.[/bold red]")
+            exit(1)
+
+        hyper_optimizer = BayesianHyperparameterOptimizer(
+            base_config=config, 
+            source_train=source_train, 
+            target_train=target_train, 
+            log_func=log_message 
+        )
+        try:
+            best_hyperparams, best_metric = hyper_optimizer.optimize() # 'best_metric' is 'loss' from Hyperopt
+
+            log_message(Panel(f"[purple]Bayesian Optimization (Hyperopt TPE) Completed.[/purple]\n"
+                              f"  Best Hyperparameters: {best_hyperparams}\n"
+                              f"  Best Objective Metric (loss): {best_metric:.6f}", # best_metric is loss
+                              border_style="purple"))
+            
+            log_message("[purple]⚙️ Updating 'nsga3_optimizer' config with found hyperparameters for the main run.[/purple]")
+            for key, value in best_hyperparams.items():
+                config['nsga3_optimizer'][key] = value
+            
+        except Exception as e_bo:
+            log_message(f"[bold red]ERROR during Bayesian Optimization (Hyperopt): {e_bo}. Proceeding with original hyperparameters.[/bold red]")
+            import traceback 
+            log_message(traceback.format_exc())
+    
     log_message(Panel("[magenta]🧬 Defining Optimization Problem...[/magenta]", border_style="magenta"))
     source_dim_cfg = (pr_config['source_num_keypoints'], 3)
     target_dim_cfg = (pr_config['target_num_keypoints'], 3)
@@ -123,12 +157,14 @@ def main():
     log_message("[green]✓ Optimization problem defined.[/green]")
 
     log_message(Panel("[cyan]🚀 Running NSGA-III Optimization...[/cyan]", border_style="cyan"))
-    nsga3_cfg = config.get('nsga3_optimizer')
+    nsga3_cfg = config.get('nsga3_optimizer') 
     if not nsga3_cfg:
         log_message("[bold red]ERROR: 'nsga3_optimizer' section missing in config.yaml[/bold red]")
         exit(1)
 
-    runner = EvolutionaryRunner(problem, nsga3_cfg, config['settings'].get('global_random_seed'))
+    main_ea_verbose_level = config.get('settings', {}).get('verbose_ea_runner', 1) 
+    runner = EvolutionaryRunner(problem, nsga3_cfg, config['settings'].get('global_random_seed'), verbose_level=main_ea_verbose_level)
+
 
     start_time = time.time()
     results = runner.run()
@@ -155,8 +191,8 @@ def main():
         except Exception as e:
             log_message(f"[yellow]Warning: Could not save evolution history: {e}[/yellow]")
 
-        # --- Enhanced Pareto Front Plot ---
-        plt.style.use('seaborn-v0_8-whitegrid') # Using a seaborn style for better aesthetics
+        # --- Pareto Front Plot ---
+        plt.style.use('seaborn-v0_8-whitegrid') 
         plt.figure(figsize=(10, 7))
         
         # Scatter plot of all non-dominated solutions

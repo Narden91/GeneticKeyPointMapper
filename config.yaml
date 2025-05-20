@@ -2,9 +2,8 @@ settings:
   verbose: 0 # 0: minimal, 1: basic 2: extended
   global_random_seed: 42
 
-# --- POSE RETARGETING ---
 pose_retargeting:
-  data_base_path: "data/" # Base path 
+  data_base_path: "data/" 
   source_keypoints_file_suffix: "__KP3D.csv"
   target_keypoints_file_suffix: "__AL.csv"
   source_num_keypoints: 33
@@ -43,13 +42,23 @@ nsga3_optimizer:
   mutation_prob: 0.1 # Per-variable mutation probability
   mutation_eta: 20  # For Polynomial Mutation
 
-  # Weights for objectives (not used by NSGA-III directly, but for final selection or if simplifying to single objective later)
+  # Weights for objectives (not used by NSGA-III directly, but for final selection)
   objective_weights:
     accuracy: 1.0
     temporal_consistency: 0.5
     # anatomical_plausibility: 0.2 # For future ?
 
-bayesian_methods:
-  params:
-    alpha: 1.0
-    beta: 1.0
+bayesian_optimizer_settings:
+  run_bayesian_opt: true
+  max_evals_bo: 3         # Number of Hyperopt evaluations
+  training_data_subset_ratio_bo: 0.2 # Use 20% of training data
+
+  search_space:
+    population_size: {type: "quniform", low: 30, high: 120, q: 1}
+    crossover_prob: {type: "uniform", low: 0.7, high: 0.99}
+    crossover_eta: {type: "quniform", low: 5, high: 30, q: 1}
+    mutation_prob: {type: "uniform", low: 0.005, high: 0.15}
+    mutation_eta: {type: "quniform", low: 10, high: 40, q: 1}
+
+  base_nsga3_config_for_bo_eval:
+    num_generations: 8

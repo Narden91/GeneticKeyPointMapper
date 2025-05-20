@@ -106,4 +106,5 @@ output/*
 models/*
 plots/*
 .env
-reports/
+reports/*
+reports
