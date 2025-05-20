@@ -27,7 +27,20 @@ The system is specifically designed to work with human movement data from differ
 - Jumping (F-JUMP)
 - Static anatomical poses (A-POSE)
 
-### 2. Transformation Model
+A detailed configuration file also guides the system, specifying data paths, keypoint numbers, movement filters, optimization parameters, and subject information for train/test splits.
+
+### 2. Data Preprocessing
+Before training, the raw input data undergoes several preparation steps:
+1.  **Loading & Parsing:** CSV files are read and structured into numerical arrays representing sequences of 3D poses.
+2.  **Pairing & Filtering:** Source and target files representing the same motion are paired. Sequences can be filtered by movement type based on configuration.
+3.  **Frame Synchronization:** If paired sequences have different numbers of frames, they are typically truncated to the shorter length.
+4.  **Missing Data Handling:**
+    *   Frames with entirely missing data (e.g., marked by specific placeholder values) might be removed.
+    *   Interpolation techniques can be used to fill in missing values within a sequence.
+5.  **Normalization (Optional):** Pose coordinates can be normalized (e.g., by subject height) to make the learned transformation more robust to variations in subject size.
+6.  **Train/Test Split:** Subjects are divided into training and testing sets. This step typically occurs after identifying all available data but before the main optimization loop, ensuring the model is trained on one subset of subjects and tested on another unseen subset.
+
+### 3. Transformation Model
 The core of the system is a mathematical transformation that converts source poses from markerless video tracking to biomechanically accurate target poses:
 
 ```
@@ -41,7 +54,7 @@ Where:
 
 Together, these parameters form the "genome" that the system evolves to find optimal transformations between the markerless tracking data and clinically relevant biomechanical landmarks.
 
-### 3. Evolutionary Optimization (NSGA-III)
+### 4. Evolutionary Optimization (NSGA-III)
 The system uses evolutionary algorithms to find the best transformation parameters:
 
 1. **Initialization**: Create a population of random transformation parameters
@@ -111,6 +124,10 @@ The system will:
 
 ## Output and Results
 
+The system generates several key outputs to help users understand and utilize the learned transformations:
+- **Performance Reports:** Visualizations like the Pareto front and evolution progress plots, detailed log files, and a saved history of the optimization process.
+- **Optimized Solutions:** The parameters for the best-performing transformations and their associated performance metrics.
+
 ### 1. Pareto Front Plot
 The system produces a plot showing the trade-off between anatomical accuracy (MPJPE) and temporal consistency:
 - Each point represents a different possible transformation solution
@@ -126,7 +143,7 @@ For selected solutions, the system provides:
 ### 3. Using the Results
 After optimization, you can:
 - Select a solution that offers your preferred balance between anatomical accuracy and movement smoothness
-- Apply the transformation to new markerless tracking data using the `transform_source_to_target()` function
+- Apply the transformation to new markerless tracking data using the `transform_source_to_target()` function in `genome_and_transform.py`
 - Perform clinical gait analysis on the transformed data, including:
   - Joint angle calculations
   - Stride analysis
@@ -149,9 +166,10 @@ nsga3_optimizer:
   population_size: 100
   num_generations: 50
   
-  # Objective weights for final solution selection
+  # Objective weights for final solution selection (Note: NSGA-III doesn't directly use weights for Pareto optimality,
+  # but these could guide post-optimization selection or a weighted-sum approach if used differently)
   objective_weights:
-    accuracy: 1.0            # Prioritize anatomical accuracy
+    accuracy: 1.0             # Prioritize anatomical accuracy
     temporal_consistency: 0.5 # Still consider smoothness but with lower weight
 ```
 
@@ -189,10 +207,9 @@ Potential enhancements to the system:
 - **Additional Modalities**: Extend to support other markerless tracking systems and clinical models
 - **Pathology-specific Models**: Develop specialized transformations for specific movement disorders
 
+## Authors
 
-## License
-
-Emanuele Nardone
+Emanuele Nardone/ Cesare Davide Pace
 
 ## Acknowledgements
 

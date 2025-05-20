@@ -37,7 +37,7 @@ genome_definition:
 
 nsga3_optimizer:
   population_size: 10 # Start small
-  num_generations: 10 # Start small
+  num_generations: 5 # Start small
   crossover_prob: 0.9
   crossover_eta: 15 # For SBX
   mutation_prob: 0.1 # Per-variable mutation probability
