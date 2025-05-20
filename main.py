@@ -128,7 +128,7 @@ def main():
         log_message("[bold red]ERROR: 'nsga3_optimizer' section missing in config.yaml[/bold red]")
         exit(1)
 
-    # return 
+    return 
 
     runner = EvolutionaryRunner(problem, nsga3_cfg, config['settings'].get('global_random_seed'))
 

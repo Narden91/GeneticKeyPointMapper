@@ -27,9 +27,8 @@ pose_retargeting:
   test_subjects: ["TDB_004_F", "TDB_011_M", "TDB_028_M", "TDB_032_F", "TDB_035_F", "TDB_037_M", "TDB_038_M", "TDB_041_F", "TDB_042_F", "TDB_049_F", "TDB_053_M", "TDB_055_M", "TDB_061_M", "TDB_071_F"]
 
   preprocessing:
-    normalization_range: [0, 1] # (min, max) for coordinate scaling, or null to skip
-    # outlier_filter: "median" # "savitzky_golay" or null 
-    # missing_data_method: "linear_interpolate" # or "cubic_spline" 
+    normalize_by_height: true  
+    subject_characteristics_file: "SUBJECTS_CHARACTERISTICS.csv" 
 
 genome_definition:
   C1_init_bounds: [0, 1]  # For correspondence matrix
@@ -49,63 +48,6 @@ nsga3_optimizer:
     accuracy: 1.0
     temporal_consistency: 0.5
     # anatomical_plausibility: 0.2 # For future ?
-
-model:
-  type: LogisticRegression  # Options: RandomForest, XGBoost, CatBoost, LogisticRegression
-  global_random_state: 42
-
-  LogisticRegression_params:
-    C: 1.0
-    solver: 'lbfgs'  # For multiclass problems
-    multi_class: 'multinomial'  # For multiclass problems
-    max_iter: 1000
-    # penalty: 'l2'  # default
-    # class_weight: 'balanced'  # Optional for imbalanced classes
-
-  RandomForest_params:
-    n_estimators: 100
-    max_depth: 5 # null means no limit or use scikit-learn default
-    # min_samples_split: 2
-    # min_samples_leaf: 1
-    # random_state: 42 # Overrides global_random_state
-
-  XGBoost_params:
-    n_estimators: 100
-    learning_rate: 0.1
-    # max_depth: 3
-    # subsample: 0.8
-    # colsample_bytree: 0.8
-    # objective: 'multi:softprob' # Auto-set: 'multi:softprob' for multiclass, 'binary:logistic' for binary
-    # eval_metric: 'mlogloss'     # Auto-set: 'mlogloss' for multiclass, 'logloss' for binary
-    # use_label_encoder: false    # Auto-set to False
-    # random_state: 42            # Overrides global_random_state
-    
-  CatBoost_params:
-    iterations: 200 # Equivalent to n_estimators
-    learning_rate: 0.05
-    # depth: 6
-    # l2_leaf_reg: 3
-    # loss_function: 'MultiClass' # Auto-set: 'MultiClass' for multiclass, 'Logloss' for binary
-    # verbose: 0                  # Auto-set to 0 (silent) unless specified
-    # random_seed: 42             # Overrides global_random_state (CatBoost uses random_seed)
-
-cross_validation:
-  n_splits: 5
-  shuffle: True
-  # random_state: 42 # Optional: uses model.global_random_state by default if not set here
-
-calibration:
-  enabled: False # Set to True to enable calibration
-  default_method: "isotonic" # Fallback if specific model method not found
-  randomforest_method: "isotonic" # or "sigmoid"
-  xgboost_method: "isotonic"
-  catboost_method: "isotonic" 
-
-explainer:
-  shap:
-    enabled: False # Set to True to enable SHAP explanations
-    summary_plot_path: "reports/shap_summary_plot.png" # Path to save SHAP summary plot
-    # Add other SHAP specific parameters if your explainer.py uses them
 
 bayesian_methods:
   params:
