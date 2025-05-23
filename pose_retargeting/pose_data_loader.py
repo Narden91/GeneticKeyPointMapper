@@ -10,6 +10,27 @@ import re
 console = Console()
 
 
+class PoseSequenceData:
+    """Container for pose sequence data with normalization information."""
+    def __init__(self, sequence, subject_id=None, movement_type=None, 
+                 is_normalized=False, normalization_factor=None):
+        self.sequence = sequence  # (frames, keypoints, 3)
+        self.subject_id = subject_id
+        self.movement_type = movement_type
+        self.is_normalized = is_normalized
+        self.normalization_factor = normalization_factor  # height in meters if normalized
+        
+    def get_denormalized_sequence(self):
+        """Return the sequence in original scale (meters)."""
+        if self.is_normalized and self.normalization_factor is not None:
+            return self.sequence * self.normalization_factor
+        return self.sequence
+    
+    @property
+    def shape(self):
+        return self.sequence.shape
+
+
 def extract_movement_from_filename(filename: str) -> str | None:
     """
     Extracts the movement identifier from the filename.
@@ -92,18 +113,25 @@ def load_subject_characteristics(file_path: str) -> dict[str, float] | None:
 
 
 
-def preprocess_sequence_data(sequence: np.ndarray, subject_height_m: float | None = None, normalize_by_height_flag: bool = False):
+def preprocess_sequence_data(sequence: np.ndarray, subject_height_m: float | None = None, 
+                           normalize_by_height_flag: bool = False, subject_id: str = None,
+                           movement_type: str = None):
     """
     Applies preprocessing to a single sequence (frames, K, 3).
-    Optionally normalizes by subject height.
+    Returns a PoseSequenceData object with normalization information.
     """
     if sequence is None:
         return None
+
+    is_normalized = False
+    normalization_factor = None
 
     # --- Height Normalization ---
     if normalize_by_height_flag:
         if subject_height_m is not None and subject_height_m > 0:
             sequence = sequence / subject_height_m
+            is_normalized = True
+            normalization_factor = subject_height_m
         elif subject_height_m is None and normalize_by_height_flag:
             pass
         elif subject_height_m <= 0 and normalize_by_height_flag:
@@ -126,8 +154,14 @@ def preprocess_sequence_data(sequence: np.ndarray, subject_height_m: float | Non
     else:
         # If sequence is empty (0 frames), just return it as is (or handle as error)
         pass
-            
-    return sequence.astype(np.float32)
+    
+    return PoseSequenceData(
+        sequence=sequence.astype(np.float32),
+        subject_id=subject_id,
+        movement_type=movement_type,
+        is_normalized=is_normalized,
+        normalization_factor=normalization_factor
+    )
 
 
 def _remove_all_minus_one_frames_synced(
@@ -179,6 +213,7 @@ def load_pose_data(config, verbose=0):
     Loads source (KP3D) and target (AL) pose data based on config.
     Performs train/test split by subject and filters by movement.
     Optionally normalizes data by subject height.
+    Returns lists of PoseSequenceData objects instead of raw numpy arrays.
     """
     pr_config = config['pose_retargeting']
     data_base_path = pr_config['data_base_path']
@@ -321,17 +356,25 @@ def load_pose_data(config, verbose=0):
                         source_seq = source_seq_filtered
                         target_seq = target_seq_filtered
                                                 
-                        source_seq_proc = preprocess_sequence_data(source_seq, 
-                                                                   subject_height_m=current_subject_height_m,
-                                                                   normalize_by_height_flag=norm_by_height_flag_param and valid_subj_height_norm) # only apply if flag is true AND height is valid
-                        target_seq_proc = preprocess_sequence_data(target_seq,
-                                                                   subject_height_m=current_subject_height_m,
-                                                                   normalize_by_height_flag=norm_by_height_flag_param and valid_subj_height_norm)
+                        source_seq_data = preprocess_sequence_data(
+                            source_seq, 
+                            subject_height_m=current_subject_height_m,
+                            normalize_by_height_flag=norm_by_height_flag_param and valid_subj_height_norm,
+                            subject_id=subject_id,
+                            movement_type=movement_type
+                        )
+                        target_seq_data = preprocess_sequence_data(
+                            target_seq,
+                            subject_height_m=current_subject_height_m,
+                            normalize_by_height_flag=norm_by_height_flag_param and valid_subj_height_norm,
+                            subject_id=subject_id,
+                            movement_type=movement_type
+                        )
                         
-                        if source_seq_proc is not None and target_seq_proc is not None and \
-                           source_seq_proc.shape[0] > 0 and target_seq_proc.shape[0] > 0:
-                            source_data_list.append(source_seq_proc)
-                            target_data_list.append(target_seq_proc)
+                        if (source_seq_data is not None and target_seq_data is not None and 
+                            source_seq_data.sequence.shape[0] > 0 and target_seq_data.sequence.shape[0] > 0):
+                            source_data_list.append(source_seq_data)
+                            target_data_list.append(target_seq_data)
                             processed_sequences_for_subject +=1
                         elif verbose > 1:
                             console.print(f"      [yellow]Skipping pair {filename} post-processing due to empty sequence result.[/yellow]")

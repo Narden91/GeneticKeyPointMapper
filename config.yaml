@@ -35,22 +35,27 @@ genome_definition:
   B_init_bounds: [-0.2, 0.2] # For bias vectors
 
 nsga3_optimizer:
-  population_size: 10 # Start small
-  num_generations: 5 # Start small
-  crossover_prob: 0.9
+  population_size: 10 
+  num_generations: 5 
+  crossover_prob: 0.7
   crossover_eta: 15 # For SBX
   mutation_prob: 0.1 # Per-variable mutation probability
   mutation_eta: 20  # For Polynomial Mutation
+  
+  # Trimmed mean percentage (0.1 = remove top 10% of errors)
+  trim_percentage: 0.1
 
-  # Weights for objectives (not used by NSGA-III directly, but for final selection)
+  # Weights for objectives in Bayesian Optimization
+  # These are used to combine multiple objectives into a single metric for hyperparameter optimization
   objective_weights:
-    accuracy: 1.0
-    temporal_consistency: 0.5
-    # anatomical_plausibility: 0.2 # For future ?
+    mpjpe: 0.3        # Standard MPJPE in meters
+    trimmed: 0.4      # Trimmed MPJPE (robust to outliers)
+    median: 0.2       # Median PJPE (robust to outliers)
+    temporal: 0.1     # Temporal consistency
 
 bayesian_optimizer_settings:
-  run_bayesian_opt: true
-  max_evals_bo: 3         # Number of Hyperopt evaluations
+  run_bayesian_opt: false
+  max_evals_bo: 30         # Number of Hyperopt evaluations
   training_data_subset_ratio_bo: 0.2 # Use 20% of training data
 
   search_space:
@@ -59,6 +64,7 @@ bayesian_optimizer_settings:
     crossover_eta: {type: "quniform", low: 5, high: 30, q: 1}
     mutation_prob: {type: "uniform", low: 0.005, high: 0.15}
     mutation_eta: {type: "quniform", low: 10, high: 40, q: 1}
+    trim_percentage: {type: "uniform", low: 0.05, high: 0.2}  # Also optimize trim percentage
 
   base_nsga3_config_for_bo_eval:
     num_generations: 8

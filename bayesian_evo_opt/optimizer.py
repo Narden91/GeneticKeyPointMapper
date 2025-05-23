@@ -12,8 +12,8 @@ from pose_retargeting.evolutionary_runner import EvolutionaryRunner
 class BayesianHyperparameterOptimizer:
     def __init__(self, base_config, source_train, target_train, log_func):
         self.base_config = copy.deepcopy(base_config)
-        self.source_train = source_train
-        self.target_train = target_train
+        self.source_train = source_train  # List of PoseSequenceData objects
+        self.target_train = target_train  # List of PoseSequenceData objects
         self.log_func = log_func
 
         self.bo_config = self.base_config['bayesian_optimizer_settings']
@@ -77,13 +77,17 @@ class BayesianHyperparameterOptimizer:
 
         pr_config = self.base_config['pose_retargeting']
         genome_bounds_cfg = self.base_config.get('genome_definition')
+        
+        # Get trim percentage for robust metrics
+        trim_percentage = trial_nsga3_config.get('trim_percentage', 0.1)
 
         problem = PoseRetargetingProblem(
             source_sequences_train=source_train_eval,
             target_sequences_train=target_train_eval,
             source_dim_config=(pr_config['source_num_keypoints'], 3),
             target_dim_config=(pr_config['target_num_keypoints'], 3),
-            genome_param_bounds=genome_bounds_cfg
+            genome_param_bounds=genome_bounds_cfg,
+            trim_percentage=trim_percentage
         )
         
         runner_seed = self.base_config['settings'].get('global_random_seed')
@@ -102,11 +106,34 @@ class BayesianHyperparameterOptimizer:
 
             if results is not None and hasattr(results, 'F') and results.F is not None and results.F.shape[0] > 0:
                 pareto_front_F = results.F
-                min_mpjpe = np.min(pareto_front_F[:, 0])
-                min_temp_consist = np.min(pareto_front_F[:, 1])
-                weights_cfg = self.base_config['nsga3_optimizer'].get('objective_weights', {'accuracy': 1.0, 'temporal_consistency': 1.0})
-                metric_value = (weights_cfg.get('accuracy', 1.0) * min_mpjpe + 
-                                weights_cfg.get('temporal_consistency', 1.0) * min_temp_consist)
+                
+                # Unscale objectives if the problem used scaling
+                if hasattr(problem, 'objective_scales') and problem.objective_scales is not None:
+                    pareto_front_F_unscaled = pareto_front_F * problem.objective_scales
+                else:
+                    # If no scaling available, use default scales
+                    default_scales = np.array([1.0, 0.5, 1.0, 1.0, 0.01, 1.5])
+                    pareto_front_F_unscaled = pareto_front_F * default_scales
+                
+                # Use a combination of metrics for Bayesian optimization
+                # Prioritize robust metrics (trimmed MPJPE and median)
+                min_mpjpe_meters = np.min(pareto_front_F_unscaled[:, 0])
+                min_trimmed_mpjpe = np.min(pareto_front_F_unscaled[:, 2])
+                min_median_pjpe = np.min(pareto_front_F_unscaled[:, 3])
+                min_temporal = np.min(pareto_front_F_unscaled[:, 4])
+                
+                # Weight robust metrics more heavily
+                weights_cfg = self.base_config['nsga3_optimizer'].get('objective_weights', {
+                    'mpjpe': 0.3,
+                    'trimmed': 0.4,
+                    'median': 0.2,
+                    'temporal': 0.1
+                })
+                
+                metric_value = (weights_cfg.get('mpjpe', 0.3) * min_mpjpe_meters + 
+                               weights_cfg.get('trimmed', 0.4) * min_trimmed_mpjpe +
+                               weights_cfg.get('median', 0.2) * min_median_pjpe +
+                               weights_cfg.get('temporal', 0.1) * min_temporal)
             
             self.log_func(f"[BO Eval #{self.trial_count}] Loss: {metric_value:.6f}, EA: {duration_ea_run:.2f}s {ea_run_details_str} {subset_info_str}. Params: {current_hyperparams}")
             return {'loss': metric_value, 'status': STATUS_OK, 'params': current_hyperparams, 'duration': duration_ea_run}
@@ -143,7 +170,7 @@ class BayesianHyperparameterOptimizer:
             csv_path = os.path.join(self.reports_dir, "bo_hyperopt_trials.csv")
             df_trials.to_csv(csv_path, index=False)
             self.log_func(f"[BO Insights] All trial data saved to {csv_path}")
-        except Exception as e_csv: # Catch specific pandas/CSV errors if any
+        except Exception as e_csv:
             self.log_func(f"[BO Insights] Error during CSV saving: {e_csv}")
 
 
@@ -175,7 +202,7 @@ class BayesianHyperparameterOptimizer:
         duration_bo = time.time() - start_time_bo
         self.log_func(f"\n[BO Hyperopt] TPE completed in {duration_bo:.2f}s.")
 
-        self._log_insights_no_plots(trials) # Call the version without plotting
+        self._log_insights_no_plots(trials)
 
         best_hyperparams_dict = {}
         best_loss_val = np.inf
@@ -193,7 +220,6 @@ class BayesianHyperparameterOptimizer:
         
         self.log_func(f"[BO Hyperopt] Best hyperparameters found: {best_hyperparams_dict}")
         
-        # Corrected f-string for logging best_loss_val
         if best_loss_val != np.inf:
             self.log_func(f"[BO Hyperopt] Best objective value (loss): {best_loss_val:.6f}")
         else:
